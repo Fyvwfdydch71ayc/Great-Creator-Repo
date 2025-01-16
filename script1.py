@@ -12,9 +12,6 @@ import os
 # Apply nest_asyncio to enable asyncio in nested environments like Jupyter or multi-threaded apps
 nest_asyncio.apply()
 
-# Bot Token
-BOT_TOKEN = "7660007316:AAFfKFbH9NbMC3z1g5sZBOCbnxreWXkVglI"
-
 # URL for the logo image
 LOGO_URL = "http://ob.saleh-kh.lol:2082/download.php?f=BQACAgQAAxkBAAEE4uxniIBRq8FhJnz_G3lxt8k31axKZQACpxkAAsuqQVB1FZV0GOmVGy8E&s=2449394&n=Picsart_25-01-16_09-09-54-162_5783091185375517095.png&m=image%2Fpng&T=MTczNzAxMzM5NA=="
 
