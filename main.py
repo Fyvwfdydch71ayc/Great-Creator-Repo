@@ -18,13 +18,14 @@ async def run_bot() -> None:
     
     app = ApplicationBuilder().token(bot_token).build()  # Use the bot token
 
-    #    # Add handlers
-    application.add_handler(CommandHandler("start", start))
+    # Add handlers
+    app.add_handler(CommandHandler("start", start))
 
     # Use filters.ALL to capture all types of messages
-    application.add_handler(MessageHandler(filters.ALL, handle_media))
+    app.add_handler(MessageHandler(filters.ALL, handle_media))
 
     await app.run_polling()
+
 
 async def main() -> None:
     # Run both the bot and the web server concurrently
