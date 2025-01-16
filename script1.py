@@ -1,132 +1,139 @@
-import csv
 import asyncio
-import nest_asyncio
-import os  # Import the os module to access environment variables
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ChatJoinRequestHandler
-from telegram.error import TelegramError
+import requests
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from telegram.ext import CallbackContext
+from PIL import Image
+from io import BytesIO
+import nest_asyncio
+import re
+import os
 
-# Enable nested event loop for Jupyter notebook or other asynchronous environments
+# Apply nest_asyncio to enable asyncio in nested environments like Jupyter or multi-threaded apps
 nest_asyncio.apply()
 
-# Fetch the ADMIN_ID here
-ADMIN_ID = 7464687297  # Replace this with the actual admin user ID (6773787379 as requested)
+# Bot Token
+BOT_TOKEN = "7660007316:AAFfKFbH9NbMC3z1g5sZBOCbnxreWXkVglI"
 
-# GIF URL
-gif_url = "https://file-to-link-bot-nx-a4a8eaae5135.herokuapp.com/dl/67289d99cafd64d09ea6d2c0"
+# URL for the logo image
+LOGO_URL = "http://ob.saleh-kh.lol:2082/download.php?f=BQACAgQAAxkBAAEE4uxniIBRq8FhJnz_G3lxt8k31axKZQACpxkAAsuqQVB1FZV0GOmVGy8E&s=2449394&n=Picsart_25-01-16_09-09-54-162_5783091185375517095.png&m=image%2Fpng&T=MTczNzAxMzM5NA=="
 
-# List to store user IDs who interacted with the bot
-user_ids = set()  # Using a set to ensure unique user IDs
+# Path to save the logo
+LOGO_PATH = "downloaded_logo.png"
 
-# Dictionary to store invite links for each chat
-invite_links = {}
+# Download the logo image from the URL
+def download_logo(url: str, save_path: str):
+    response = requests.get(url)
+    if response.status_code == 200:
+        with open(save_path, 'wb') as f:
+            f.write(response.content)
+        print(f"Logo saved to {save_path}")
+    else:
+        print(f"Failed to download logo. Status code: {response.status_code}")
 
-# Function to save user IDs to CSV
-def save_user_ids_to_csv():
-    with open('user_ids.csv', mode='w', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow(["User ID"])  # Only User ID in the CSV
-        for user_id in user_ids:
-            writer.writerow([user_id])
+# Ensure the logo is downloaded once at the start
+if not os.path.exists(LOGO_PATH):
+    download_logo(LOGO_URL, LOGO_PATH)
 
-# Define the start command handler
+# Define the customized caption with title support
+def get_custom_caption(link, title):
+    return f"""
+🎃 ᴘᴏᴡᴇʀᴇᴅ ʙʏ↓ Telegram                
+                🍯 @HotError      
+
+Title - {title}
+⌬ Hot Error
+╰─➩ {link}
+
+Other Categories ↓ 🥵⚡
+https://t.me/HotError
+"""
+
+# Function to add logo to image
+def add_logo_to_image(photo: Image.Image, logo_path: str) -> Image.Image:
+    # Open the logo image
+    logo = Image.open(logo_path)
+
+    # Resize logo if necessary (optional, adjust as needed)
+    logo_width = photo.width // 3  # Resize logo to 1/3rd of the image width
+    logo_height = int((logo_width / logo.width) * logo.height)
+    logo = logo.resize((logo_width, logo_height), Image.Resampling.LANCZOS)
+
+    # Position the logo at the top center of the photo
+    position = ((photo.width - logo.width) // 2, 0)
+
+    # Paste the logo on the photo
+    photo.paste(logo, position, logo.convert("RGBA"))
+    return photo
+
+# Function to handle received media and customize the caption
+async def handle_media(update: Update, context: CallbackContext):
+    media = None
+    caption = None
+    link = ""
+    title = "No Title"  # Default title if no Title= pattern is found
+
+    # Only handle media messages that have a caption (e.g., photo, video, etc.)
+    if update.message.photo:
+        caption = update.message.caption
+        media = update.message.photo[-1]  # Take the highest quality photo
+    elif update.message.video:
+        caption = update.message.caption
+        media = update.message.video
+    elif update.message.document:
+        caption = update.message.caption
+        media = update.message.document
+    elif update.message.voice:
+        caption = update.message.caption
+        media = update.message.voice
+    elif update.message.animation:
+        caption = update.message.caption
+        media = update.message.animation
+
+    # If a caption exists, check if it contains the Title= pattern
+    if caption:
+        title_match = re.search(r"Title=\s?\{(.*?)\}", caption)  # Regex to extract title inside {}
+
+        if title_match:
+            title = title_match.group(1).strip()  # Extracted title inside the {}
+
+        # Use a regex to extract only the link (http or https)
+        link_match = re.search(r"https?://[^\s]+", caption)
+        if link_match:
+            link = link_match.group(0)  # Extract the full link
+
+        custom_caption = get_custom_caption(link, title)  # Use extracted title
+
+        # If the media is a photo, download, process and send with the custom caption
+        if update.message.photo:
+            # Download the image
+            photo_file = await media.get_file()
+            photo_bytes = await photo_file.download_as_bytearray()
+
+            # Open the image with Pillow
+            photo = Image.open(BytesIO(photo_bytes))
+
+            # Add the logo to the photo
+            photo_with_logo = add_logo_to_image(photo, LOGO_PATH)
+
+            # Save the modified image to a BytesIO object
+            output = BytesIO()
+            photo_with_logo.save(output, format="PNG")
+            output.seek(0)
+
+            # Send the modified image with the custom caption
+            await context.bot.send_photo(chat_id=update.effective_chat.id, photo=output, caption=custom_caption)
+
+        # For video, document, voice note, and animation, just send the media with the custom caption
+        elif update.message.video:
+            await context.bot.send_video(chat_id=update.effective_chat.id, video=media.file_id, caption=custom_caption)
+        elif update.message.document:
+            await context.bot.send_document(chat_id=update.effective_chat.id, document=media.file_id, caption=custom_caption)
+        elif update.message.voice:
+            await context.bot.send_voice(chat_id=update.effective_chat.id, voice=media.file_id, caption=custom_caption)
+        elif update.message.animation:
+            await context.bot.send_animation(chat_id=update.effective_chat.id, animation=media.file_id, caption=custom_caption)
+
+# Function to start the bot and process incoming updates
 async def start(update: Update, context: CallbackContext):
-    user = update.message.from_user
-    start_message = (
-        f"Hi, I'm a group/channel join request accepter bot!\n\n"
-        f"Just add me to your group or channel, and I'll accept any join requests instantly.\n"
-        f"I'll process your group/channel join requests in just 0.1 second!"
-    )
-    
-    inline_buttons = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("Add Group", url="https://t.me/HotErrorJoinBot?startgroup&admin=invite_users+delete_messages+restrict_members"),
-            InlineKeyboardButton("Add Channel", url="https://t.me/HotErrorJoinBot?startchannel&admin=invite_users+delete_messages+restrict_members")
-        ]
-    ])
-    
-    await update.message.reply_text(start_message, reply_markup=inline_buttons)
-
-    # Add user ID to the set if not already present
-    user_ids.add(user.id)
-
-# Define the chat join request handler
-async def approve(update: Update, context: CallbackContext):
-    chat = update.chat_join_request.chat  # Correct way to access chat info in chat join requests
-    user = update.chat_join_request.from_user  # Access the user who requested to join
-    
-    try:
-        # Approve the join request and send message in parallel
-        tasks = [
-            context.bot.approve_chat_join_request(chat.id, user.id),
-            send_welcome_message(context, user, chat)
-        ]
-        await asyncio.gather(*tasks)  # Run both tasks concurrently
-        
-    except TelegramError as e:
-        print(f"Error while approving join request: {e}")
-    except Exception as err:
-        print(str(err))
-
-# Function to send the welcome message
-async def send_welcome_message(context: CallbackContext, user, chat):
-    # If the invite link for the chat is not already stored, create and store it
-    if chat.id not in invite_links:
-        invite_url = await context.bot.export_chat_invite_link(chat.id)
-        invite_links[chat.id] = invite_url
-    else:
-        invite_url = invite_links[chat.id]
-
-    # Updated caption with HTML formatting for bold text and mentions
-    caption = (
-        f"Hello <b><a href='tg://user?id={user.id}'>{user.first_name}</a></b>!\n"
-        f"Welcome To <b>{chat.title}</b>\n\n"
-        "👇More Spicy Content 🥵🔥\n"
-        "<b>@HotError</b>\n"
-        "<b>@HotError</b>\n"
-        "<b>@HotError</b>"
-    )
-    
-    inline_button = InlineKeyboardMarkup([
-        [InlineKeyboardButton(chat.title, url=invite_url)]
-    ])
-    
-    # Send video message with inline button and caption
-    await context.bot.send_video(user.id, gif_url, caption=caption, parse_mode="HTML", reply_markup=inline_button)
-
-# Define the detail command handler
-async def detail(update: Update, context: CallbackContext):
-    user = update.message.from_user
-    if user.id == ADMIN_ID:
-        if not invite_links:
-            await update.message.reply_text("No groups or channels joined yet.")
-        else:
-            details_message = "Here are all the groups/channels the bot has joined:\n\n"
-            for chat_id, invite_url in invite_links.items():
-                chat = await context.bot.get_chat(chat_id)
-                details_message += f"**{chat.title}**\nInvite URL: {invite_url}\n\n"
-            
-            await update.message.reply_text(details_message)
-    else:
-        await update.message.reply_text("You do not have permission to view this information.")
-
-# Define the id command handler to send CSV
-async def send_cv(update: Update, context: CallbackContext):
-    user = update.message.from_user
-    if user.id == ADMIN_ID:
-        save_user_ids_to_csv()  # Save user IDs to CSV
-        
-        # Send the CSV file to the admin
-        with open('user_ids.csv', 'rb') as file:
-            await update.message.reply_document(file, caption="Here is the CV file with user IDs.")
-    else:
-        await update.message.reply_text("You do not have permission to access this data.")
-
-# Define the handle_message function in script1.py
-async def handle_message(update: Update, context: CallbackContext):
-    user = update.message.from_user
-    message_text = update.message.text
-    # You can add logic to handle different types of messages
-    # For now, let's just reply with the message content
-    await update.message.reply_text(f"Hello {user.first_name}, you sent: {message_text}")
+    await update.message.reply_text("Bot is running and ready to process media sent by anyone.")
