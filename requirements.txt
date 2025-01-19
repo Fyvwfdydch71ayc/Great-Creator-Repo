@@ -4,3 +4,4 @@ aiohttp # HTTP client/server for asyncio (if your bot is hosted and interacts wi
 asyncio  # Required for asynchronous programming (Python 3.7+ should already include it)
 Pillow
 requests
+pymongo
