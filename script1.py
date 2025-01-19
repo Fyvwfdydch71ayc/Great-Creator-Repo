@@ -1,136 +1,166 @@
-import asyncio
-import requests
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
-from telegram.ext import CallbackContext
-from PIL import Image
-from io import BytesIO
+import logging
+import random
+import string
 import nest_asyncio
-import re
-import os
+import asyncio
+import pymongo
+from telegram import Update, InputMediaPhoto, InputMediaVideo, InputMediaAudio
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
+from uuid import uuid4
 
-# Apply nest_asyncio to enable asyncio in nested environments like Jupyter or multi-threaded apps
+# Apply nest_asyncio to enable running asyncio in Jupyter or similar environments
 nest_asyncio.apply()
 
-# URL for the logo image
-LOGO_URL = "http://ob.saleh-kh.lol:2082/download.php?f=BQACAgQAAxkBAAEE4uxniIBRq8FhJnz_G3lxt8k31axKZQACpxkAAsuqQVB1FZV0GOmVGy8E&s=2449394&n=Picsart_25-01-16_09-09-54-162_5783091185375517095.png&m=image%2Fpng&T=MTczNzAxMzM5NA=="
+# MongoDB Connection
+client = pymongo.MongoClient("mongodb+srv://wenoobhosttest1:lovedogswetest81@cluster0.4lf5x.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+db = client["Cluster0"]
+media_collection = db["media_links"]
 
-# Path to save the logo
-LOGO_PATH = "downloaded_logo.png"
+# Admin ID and bot token
+ADMIN_ID = 6773787379
 
-# Download the logo image from the URL
-def download_logo(url: str, save_path: str):
-    response = requests.get(url)
-    if response.status_code == 200:
-        with open(save_path, 'wb') as f:
-            f.write(response.content)
-        print(f"Logo saved to {save_path}")
-    else:
-        print(f"Failed to download logo. Status code: {response.status_code}")
+# Set up logging
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                    level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Ensure the logo is downloaded once at the start
-if not os.path.exists(LOGO_PATH):
-    download_logo(LOGO_URL, LOGO_PATH)
+# Function to generate a unique code for each link
+def generate_unique_code():
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=8))
 
-# Define the customized caption with title support
-def get_custom_caption(link, title):
-    return f"""
-🎃 ᴘᴏᴡᴇʀᴇᴅ ʙʏ↓ Telegram                
-                🍯 @HotError      
+# Command handler to start the bot and handle the start parameter
+async def start(update: Update, context: CallbackContext):
+    user_id = update.message.from_user.id
+    start_param = update.message.text.split()[1] if len(update.message.text.split()) > 1 else None
 
-Title - {title}
-⌬ Hot Error
-╰─➩ {link}
+    if start_param:
+        # Retrieve the media data from MongoDB
+        media_data = media_collection.find_one({"code": start_param})
 
-Other Categories ↓ 🥵⚡
-https://t.me/HotError
-"""
+        if media_data:
+            media_type = media_data['type']
+            media = media_data['media']
+            caption = media_data.get('caption', None)  # Get the caption if it exists
+            
+            # Send a warning message
+            await update.message.reply_text("⚠️ This file will be deleted within 1 minute. Please take note.")
 
-# Function to add logo to image
-def add_logo_to_image(photo: Image.Image, logo_path: str) -> Image.Image:
-    # Open the logo image
-    logo = Image.open(logo_path)
+            # Send appropriate media type with caption if it exists and protect the content
+            if media_type == "photo":
+                sent_media = await update.message.reply_photo(media, caption=caption, protect_content=True)
+            elif media_type == "video":
+                sent_media = await update.message.reply_video(media, caption=caption, protect_content=True)
+            elif media_type == "document":
+                sent_media = await update.message.reply_document(media, caption=caption, protect_content=True)
+            elif media_type == "audio":
+                sent_media = await update.message.reply_audio(media, caption=caption, protect_content=True)
+            elif media_type == "sticker":
+                sent_media = await update.message.reply_sticker(media, protect_content=True)
+            elif media_type == "text":
+                sent_media = await update.message.reply_text(media, protect_content=True)  # Text message
 
-    # Resize logo if necessary (optional, adjust as needed)
-    logo_width = photo.width // 3  # Resize logo to 1/3rd of the image width
-    logo_height = int((logo_width / logo.width) * logo.height)
-    logo = logo.resize((logo_width, logo_height), Image.Resampling.LANCZOS)
+            # Schedule the deletion in the background without blocking the bot
+            asyncio.create_task(delete_media_after_1_minute(sent_media, update))
 
-    # Position the logo at the top center of the photo
-    position = ((photo.width - logo.width) // 2, 0)
+        else:
+            await update.message.reply_text("This link does not correspond to any media.")
 
-    # Paste the logo on the photo
-    photo.paste(logo, position, logo.convert("RGBA"))
-    return photo
+# New function to delete the media after 1 minute
+async def delete_media_after_1_minute(sent_media, update: Update):
+    await asyncio.sleep(60)  # Wait for 1 minute
 
-# Function to handle received media and customize the caption
+    # Delete the sent media
+    try:
+        await sent_media.delete()
+        # Optionally, inform the user that the file has been deleted
+        await update.message.reply_text("⚠️ The file has been deleted.")
+    except Exception as e:
+        logger.error(f"Error deleting message: {e}")
+
+# Message handler to process media from the admin
 async def handle_media(update: Update, context: CallbackContext):
+    # Check if the update contains a message
+    if update.message is None:
+        return  # Ignore updates without messages
+    
+    # Ignore messages from non-admins
+    if update.message.from_user.id != ADMIN_ID:
+        return
+    
+    media_type = None
     media = None
     caption = None
-    link = ""
-    title = "No Title"  # Default title if no Title= pattern is found
-
-    # Only handle media messages that have a caption (e.g., photo, video, etc.)
+    
     if update.message.photo:
-        caption = update.message.caption
-        media = update.message.photo[-1]  # Take the highest quality photo
+        media_type = "photo"
+        media = update.message.photo[-1].file_id
+        caption = update.message.caption  # Get the caption of the photo
     elif update.message.video:
-        caption = update.message.caption
-        media = update.message.video
+        media_type = "video"
+        media = update.message.video.file_id
+        caption = update.message.caption  # Get the caption of the video
     elif update.message.document:
-        caption = update.message.caption
-        media = update.message.document
+        media_type = "document"
+        media = update.message.document.file_id
+        caption = update.message.caption  # Get the caption of the document
+    elif update.message.audio:
+        media_type = "audio"
+        media = update.message.audio.file_id
+        caption = update.message.caption  # Get the caption of the audio if available
     elif update.message.voice:
-        caption = update.message.caption
-        media = update.message.voice
+        media_type = "audio"
+        media = update.message.voice.file_id
+        caption = update.message.caption  # Get the caption of the voice message, if available
+    elif update.message.sticker:
+        media_type = "sticker"
+        media = update.message.sticker.file_id
+    elif update.message.text:
+        media_type = "text"
+        media = update.message.text
     elif update.message.animation:
-        caption = update.message.caption
-        media = update.message.animation
+        media_type = "video"
+        media = update.message.animation.file_id
+        caption = update.message.caption  # Get the caption of the animation
 
-    # If a caption exists, check if it contains the Title= pattern
-    if caption:
-        title_match = re.search(r"Title=\s?\{(.*?)\}", caption)  # Regex to extract title inside {}
+    if media_type:
+        unique_code = generate_unique_code()
+        # Store the media type, media file_id, and caption in MongoDB
+        media_collection.insert_one({
+            "code": unique_code,
+            "type": media_type,
+            "media": media,
+            "caption": caption
+        })
+        
+        # Create the unique start link
+        bot_username = (await context.bot.get_me()).username
+        start_link = f"https://t.me/{bot_username}?start={unique_code}"
+        
+        # Send the generated link to the admin
+        await update.message.reply_text(f"Here is the unique link: {start_link}")
 
-        if title_match:
-            title = title_match.group(1).strip()  # Extracted title inside the {}
+# Command handler for /list to send all created parameter links with media type
+async def list_links(update: Update, context: CallbackContext):
+    # Only respond if the message is from the admin
+    if update.message.from_user.id != ADMIN_ID:
+        return
+    
+    # Retrieve all links from MongoDB
+    media_data = media_collection.find()
+    
+    # Create the list of links with media type
+    links = []
+    for idx, data in enumerate(media_data, 1):
+        media_type = data['type']
+        start_link = f"https://t.me/{(await context.bot.get_me()).username}?start={data['code']}"
+        links.append(f"({idx}) {start_link} {media_type.capitalize()}")
 
-        # Use a regex to extract only the link (http or https)
-        link_match = re.search(r"https?://[^\s]+", caption)
-        if link_match:
-            link = link_match.group(0)  # Extract the full link
+    # Split the list into chunks of 4096 characters or less
+    chunk_size = 4096
+    message_parts = [links[i:i + chunk_size] for i in range(0, len(links), chunk_size)]
+    
+    # Send the list in multiple parts
+    for part in message_parts:
+        await update.message.reply_text("\n".join(part))
 
-        custom_caption = get_custom_caption(link, title)  # Use extracted title
-
-        # If the media is a photo, download, process and send with the custom caption
-        if update.message.photo:
-            # Download the image
-            photo_file = await media.get_file()
-            photo_bytes = await photo_file.download_as_bytearray()
-
-            # Open the image with Pillow
-            photo = Image.open(BytesIO(photo_bytes))
-
-            # Add the logo to the photo
-            photo_with_logo = add_logo_to_image(photo, LOGO_PATH)
-
-            # Save the modified image to a BytesIO object
-            output = BytesIO()
-            photo_with_logo.save(output, format="PNG")
-            output.seek(0)
-
-            # Send the modified image with the custom caption
-            await context.bot.send_photo(chat_id=update.effective_chat.id, photo=output, caption=custom_caption)
-
-        # For video, document, voice note, and animation, just send the media with the custom caption
-        elif update.message.video:
-            await context.bot.send_video(chat_id=update.effective_chat.id, video=media.file_id, caption=custom_caption)
-        elif update.message.document:
-            await context.bot.send_document(chat_id=update.effective_chat.id, document=media.file_id, caption=custom_caption)
-        elif update.message.voice:
-            await context.bot.send_voice(chat_id=update.effective_chat.id, voice=media.file_id, caption=custom_caption)
-        elif update.message.animation:
-            await context.bot.send_animation(chat_id=update.effective_chat.id, animation=media.file_id, caption=custom_caption)
-
-# Function to start the bot and process incoming updates
-async def start(update: Update, context: CallbackContext):
-    await update.message.reply_text("Bot is running and ready to process media sent by anyone.")
+# Set up the application and handlers
