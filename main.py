@@ -3,7 +3,7 @@ import asyncio
 import os  # Import os module to fetch environment variables
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ChatJoinRequestHandler
 from web_server import start_web_server  # Import the web server function
-from script1 import download_logo, get_custom_caption, add_logo_to_image, handle_media, start  # Import the updated functions including ADMIN_ID
+from script1 import generate_unique_code, delete_media_after_1_minute, handle_media, list_links, start # Import the updated functions including ADMIN_ID
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -18,10 +18,14 @@ async def run_bot() -> None:
     
     app = ApplicationBuilder().token(bot_token).build()  # Use the bot token
 
-    # Add handlers
+   
+
     app.add_handler(CommandHandler("start", start))
 
-    # Use filters.ALL to capture all types of messages
+    # Handler for the /list command to send all links with media type
+    app.add_handler(CommandHandler("list", list_links))
+
+    # Handler for all messages from the admin (media, text, etc.)
     app.add_handler(MessageHandler(filters.ALL, handle_media))
 
     await app.run_polling()
