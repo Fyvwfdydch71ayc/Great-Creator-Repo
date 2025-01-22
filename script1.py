@@ -25,12 +25,12 @@ async def handle_media(update: Update, context: CallbackContext) -> None:
     elif update.message.document:
         media = update.message.document
         thumb = media.thumb  # Documents might have a thumbnail (e.g., PDFs)
-    elif update.message.sticker:
-        media = update.message.sticker
-        thumb = media.thumb  # Stickers might have a thumbnail (preview)
     elif update.message.animation:
         media = update.message.animation
         thumb = media.thumb  # GIFs also might have a thumbnail
+    elif update.message.sticker:
+        media = update.message.sticker
+        thumb = None  # Stickers do not have a thumbnail attribute
     else:
         thumb = None
 
