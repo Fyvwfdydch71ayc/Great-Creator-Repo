@@ -55,3 +55,6 @@ async def handle_media(update: Update, context: CallbackContext) -> None:
             await update.message.reply_text("No thumbnail or preview available for this media.")
 
 # Set up the Application
+# Define the start command handler
+async def start(update: Update, context: CallbackContext) -> None:
+    await update.message.reply_text("Hello! I'm your media thumbnail extract bot. Send Gif, Photo, Video, Document, Sticker, i give thumbnails of it, FREE TO USE🍃")
