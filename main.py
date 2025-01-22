@@ -21,7 +21,7 @@ async def run_bot() -> None:
    
 
 app.add_handler(CommandHandler("start", start))  # Start command handler
-    app.add_handler(MessageHandler(filters.ALL, handle_media))  # Media handler
+app.add_handler(MessageHandler(filters.ALL, handle_media))  # Media handler
 
 
     await app.run_polling()
