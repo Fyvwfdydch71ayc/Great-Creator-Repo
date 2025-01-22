@@ -1,7 +1,7 @@
 import logging
 import asyncio
 import os  # Import os module to fetch environment variables
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ChatJoinRequestHandler
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from web_server import start_web_server  # Import the web server function
 from script1 import handle_media, start  # Import the updated functions including ADMIN_ID
 
@@ -18,14 +18,12 @@ async def run_bot() -> None:
     
     app = ApplicationBuilder().token(bot_token).build()  # Use the bot token
 
-   
+    # Add handlers for bot commands and messages
+    app.add_handler(CommandHandler("start", start))  # Start command handler
+    app.add_handler(MessageHandler(filters.ALL, handle_media))  # Media handler
 
-app.add_handler(CommandHandler("start", start))  # Start command handler
-app.add_handler(MessageHandler(filters.ALL, handle_media))  # Media handler
-
-
-    await app.run_polling()
-
+    # This line should be at the same indentation level as the previous lines in this function
+    await app.run_polling()  # Correct indentation here
 
 async def main() -> None:
     # Run both the bot and the web server concurrently
