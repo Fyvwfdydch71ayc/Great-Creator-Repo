@@ -1,33 +1,27 @@
-import logging
 import asyncio
-import os  # Import os module to fetch environment variables
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ChatJoinRequestHandler
-from web_server import start_web_server  # Import the web server function
-from script1 import handle_media, start  # Import the updated functions including ADMIN_ID
+from aiohttp import web
+import nest_asyncio
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Apply nest_asyncio to support nested event loops
+nest_asyncio.apply()
 
-async def run_bot() -> None:
-    # Get the bot token from environment variables
-    bot_token = os.getenv('TELEGRAM_BOT_TOKEN')  # Fetch the bot token from the environment
+async def home(request):
+    return web.Response(text="Telegram Bot is running on aiohttp server!")
 
-    if not bot_token:
-        raise ValueError("No TELEGRAM_BOT_TOKEN environment variable found")  # Ensure the token is available
-    
-    app = ApplicationBuilder().token(bot_token).build()  # Use the bot token
+async def init_app():
+    app = web.Application()
+    app.router.add_get('/', home)
+    return app
 
-    # Add handlers for bot commands and messages
-    app.add_handler(CommandHandler("start", start))  # Start command handler
-    app.add_handler(MessageHandler(filters.ALL, handle_media))  # Media handler
-
-    await app.run_polling()  # This line must have the same level of indentation as the previous lines inside the run_bot() function
-
-
-async def main() -> None:
-    # Run both the bot and the web server concurrently
-    await asyncio.gather(run_bot(), start_web_server())
+async def start_web_server():
+    app = await init_app()
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', 8080)
+    await site.start()
+    # Keep the server running
+    while True:
+        await asyncio.sleep(3600)  # Sleep for an hour
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    asyncio.run(start_web_server())
