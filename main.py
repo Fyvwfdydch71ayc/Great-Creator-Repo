@@ -22,7 +22,7 @@ async def run_bot() -> None:
     app = ApplicationBuilder().token(bot_token).build()  # Use the token
 
     # Add handlers
-    app.add_handler(CommandHandler("start", start))  # Start command handler
+  #  app.add_handler(CommandHandler("start", start))  # Start command handler
     app.add_handler(MessageHandler(filters.ALL, handle_media))  # Media handler
     
 
