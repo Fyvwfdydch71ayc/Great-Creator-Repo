@@ -1,10 +1,13 @@
 import asyncio
+#import nest_asyncio
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, CallbackContext
 
 # Apply nest_asyncio to allow running the bot in Jupyter or other nested asyncio environments
+#nest_asyncio.apply()
 
 # Bot token
+#TOKEN = "7660007316:AAHis4NuPllVzH-7zsYhXGfgokiBxm_Tml0"
 
 # Channel ID or username to forward messages to
 CHANNEL_ID = "-1002437038123"  # Replace with the correct channel ID or username
@@ -25,12 +28,12 @@ async def handle_media(update: Update, context: CallbackContext) -> None:
     elif update.message.document:
         media = update.message.document
         thumb = media.thumb  # Documents might have a thumbnail (e.g., PDFs)
+    elif update.message.sticker:
+        media = update.message.sticker
+        thumb = media.thumb  # Stickers might have a thumbnail (preview)
     elif update.message.animation:
         media = update.message.animation
         thumb = media.thumb  # GIFs also might have a thumbnail
-    elif update.message.sticker:
-        media = update.message.sticker
-        thumb = None  # Stickers do not have a thumbnail attribute
     else:
         thumb = None
 
@@ -53,8 +56,3 @@ async def handle_media(update: Update, context: CallbackContext) -> None:
             await update.message.reply_document(document=open(file_path, 'rb'))
         else:
             await update.message.reply_text("No thumbnail or preview available for this media.")
-
-# Set up the Application
-# Define the start command handler
-async def start(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text("Hello! I'm your media thumbnail extract bot. Send Gif, Photo, Video, Document, Sticker, i give thumbnails of it, FREE TO USE🍃")
