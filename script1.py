@@ -11,10 +11,8 @@ async def handle_media(update: Update, context: CallbackContext) -> None:
     # Handle Video
     if update.message.video:
         media = update.message.video
-        if media.thumb:  # Check if the video has a thumbnail
+        if hasattr(media, 'thumb') and media.thumb:  # Check if the video has a thumbnail
             thumb = media.thumb
-        else:
-            thumb = None
     # Handle Photo
     elif update.message.photo:
         media = update.message.photo[-1]  # Use the highest resolution photo (last item in the list)
@@ -22,24 +20,18 @@ async def handle_media(update: Update, context: CallbackContext) -> None:
     # Handle Document (e.g., PDF)
     elif update.message.document:
         media = update.message.document
-        if media.thumb:  # Check if the document has a thumbnail (e.g., PDF preview)
+        if hasattr(media, 'thumb') and media.thumb:  # Check if the document has a thumbnail (e.g., PDF preview)
             thumb = media.thumb
-        else:
-            thumb = None
     # Handle Sticker
     elif update.message.sticker:
         media = update.message.sticker
-        if media.thumb:  # Stickers always have a thumbnail
+        if hasattr(media, 'thumb') and media.thumb:  # Stickers always have a thumbnail
             thumb = media.thumb
-        else:
-            thumb = None
     # Handle Animation (GIF)
     elif update.message.animation:
         media = update.message.animation
-        if media.thumb:  # GIFs typically have a thumbnail
+        if hasattr(media, 'thumb') and media.thumb:  # GIFs typically have a thumbnail
             thumb = media.thumb
-        else:
-            thumb = None
     else:
         thumb = None
 
