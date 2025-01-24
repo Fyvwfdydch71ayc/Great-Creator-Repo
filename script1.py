@@ -8,29 +8,41 @@ async def handle_media(update: Update, context: CallbackContext) -> None:
     thumb = None
     media = None
 
-    # Check the type of media and handle accordingly
+    # Handle Video
     if update.message.video:
         media = update.message.video
-        # Videos do not have 'thumb', but we can use the 'file_id' to download the video itself
-        thumb = None  # No thumbnail for regular video
+        if media.thumb:  # Check if the video has a thumbnail
+            thumb = media.thumb
+        else:
+            thumb = None
+    # Handle Photo
     elif update.message.photo:
-        # Use the highest resolution photo (last item in the list)
-        media = update.message.photo[-1]
-        thumb = None  # Photos typically don't have a thumb, but we handle it here
+        media = update.message.photo[-1]  # Use the highest resolution photo (last item in the list)
+        thumb = None  # Photos typically don't have a thumb, though you could use the photo itself
+    # Handle Document (e.g., PDF)
     elif update.message.document:
         media = update.message.document
-        # Documents like PDFs or files don't have 'thumb', so we handle accordingly
-        thumb = None
+        if media.thumb:  # Check if the document has a thumbnail (e.g., PDF preview)
+            thumb = media.thumb
+        else:
+            thumb = None
+    # Handle Sticker
     elif update.message.sticker:
         media = update.message.sticker
-        thumb = media.thumb  # Stickers might have a thumbnail (preview)
+        if media.thumb:  # Stickers always have a thumbnail
+            thumb = media.thumb
+        else:
+            thumb = None
+    # Handle Animation (GIF)
     elif update.message.animation:
         media = update.message.animation
-        thumb = media.thumb  # GIFs also might have a thumbnail
+        if media.thumb:  # GIFs typically have a thumbnail
+            thumb = media.thumb
+        else:
+            thumb = None
     else:
         thumb = None
 
-    # Check if we have a thumb (thumbnail) available
     if thumb:
         # Download the thumbnail if available
         file = await context.bot.get_file(thumb.file_id)
@@ -41,7 +53,7 @@ async def handle_media(update: Update, context: CallbackContext) -> None:
         await update.message.reply_photo(photo=open(file_path, 'rb'))
     else:
         await update.message.reply_text("No thumbnail or preview available for this media.")
-        
+    
 # Define the /start command function
 async def start(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(
