@@ -1,37 +1,39 @@
+
+# This Script For Telegram Bot, When User Send Any Type Media , Gif, Document, Video, Gif , Sticker Then If The Thumbnail Available Then It Exract Thumbnail From Telegram And Send To User
+
 import asyncio
+import nest_asyncio
 from telegram import Update
-from telegram.ext import Application, MessageHandler, CommandHandler, filters, CallbackContext
-import os
+from telegram.ext import Application, MessageHandler, filters, CallbackContext
+
+# Apply nest_asyncio to allow running the bot in Jupyter or other nested asyncio environments
+nest_asyncio.apply()
+
+# Bot token
+TOKEN = "7660007316:AAHis4NuPllVzH-7zsYhXGfgokiBxm_Tml0"
 
 # Define the asynchronous function that handles incoming media messages
 async def handle_media(update: Update, context: CallbackContext) -> None:
     thumb = None
     media = None
 
-    # Handle Video
+    # Check the type of media and handle accordingly
     if update.message.video:
         media = update.message.video
-        if hasattr(media, 'thumb') and media.thumb:  # Check if the video has a thumbnail
-            thumb = media.thumb
-    # Handle Photo
+        thumb = media.thumb  # Get the thumbnail of the video
     elif update.message.photo:
-        media = update.message.photo[-1]  # Use the highest resolution photo (last item in the list)
-        thumb = None  # Photos typically don't have a thumb, though you could use the photo itself
-    # Handle Document (e.g., PDF)
+        # Use the highest resolution photo (last item in the list)
+        media = update.message.photo[-1]
+        thumb = media.thumb  # Photos don't have a 'thumb', this is just an empty check
     elif update.message.document:
         media = update.message.document
-        if hasattr(media, 'thumb') and media.thumb:  # Check if the document has a thumbnail (e.g., PDF preview)
-            thumb = media.thumb
-    # Handle Sticker
+        thumb = media.thumb  # Documents might have a thumbnail (e.g., PDFs)
     elif update.message.sticker:
         media = update.message.sticker
-        if hasattr(media, 'thumb') and media.thumb:  # Stickers always have a thumbnail
-            thumb = media.thumb
-    # Handle Animation (GIF)
+        thumb = media.thumb  # Stickers might have a thumbnail (preview)
     elif update.message.animation:
         media = update.message.animation
-        if hasattr(media, 'thumb') and media.thumb:  # GIFs typically have a thumbnail
-            thumb = media.thumb
+        thumb = media.thumb  # GIFs also might have a thumbnail
     else:
         thumb = None
 
@@ -45,11 +47,5 @@ async def handle_media(update: Update, context: CallbackContext) -> None:
         await update.message.reply_photo(photo=open(file_path, 'rb'))
     else:
         await update.message.reply_text("No thumbnail or preview available for this media.")
-    
-# Define the /start command function
-async def start(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text(
-        "Hello! I'm your media bot. Send me any media, and I'll try to show you its thumbnail or preview!"
-    )
 
-# Define the main function to run the bot
+# Set up the Application
