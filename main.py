@@ -3,7 +3,7 @@ import asyncio
 import os  # Import the os module to access environment variables
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes, CallbackContext, Application# Add ConversationHandler import
-from script1 import handle_media, start # Corrected import statement
+from script1 import handle_media # Corrected import statement
 from web_server import start_web_server  # Import the web server function
 
 
@@ -22,7 +22,7 @@ async def run_bot() -> None:
     app = ApplicationBuilder().token(bot_token).build()  # Use the token
 
 
-    app.add_handler(CommandHandler("start", start))
+  #  app.add_handler(CommandHandler("start", start))
     # Use filters.ALL to capture all types of messages
     app.add_handler(MessageHandler(filters.ALL, handle_media))
     # Run the bot using asyncio
