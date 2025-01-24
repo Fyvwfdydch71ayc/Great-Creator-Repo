@@ -1,10 +1,7 @@
-
-# This Script For Telegram Bot, When User Send Any Type Media , Gif, Document, Video, Gif , Sticker Then If The Thumbnail Available Then It Exract Thumbnail From Telegram And Send To User
-
 import asyncio
 import nest_asyncio
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, CallbackContext
+from telegram.ext import Application, MessageHandler, filters, CommandHandler, CallbackContext
 
 # Apply nest_asyncio to allow running the bot in Jupyter or other nested asyncio environments
 nest_asyncio.apply()
@@ -34,6 +31,9 @@ async def handle_media(update: Update, context: CallbackContext) -> None:
     elif update.message.animation:
         media = update.message.animation
         thumb = media.thumb  # GIFs also might have a thumbnail
+    elif update.message.audio:
+        media = update.message.audio
+        thumb = media.thumb  # Audio may have a thumbnail (cover image)
     else:
         thumb = None
 
@@ -48,4 +48,7 @@ async def handle_media(update: Update, context: CallbackContext) -> None:
     else:
         await update.message.reply_text("No thumbnail or preview available for this media.")
 
-# Set up the Application
+# Define the start command handler
+async def start(update: Update, context: CallbackContext) -> None:
+    # Send a welcome message when the user starts the bot
+    await update.message.reply_text("Hello! 👋 I'm your media bot. Send me any gif, sticker, photo, video, audio, or document, and I’ll fetch its thumbnail or preview for you! Let’s get started! 🚀")
