@@ -5,16 +5,16 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from telegram.ext import CallbackContext
 from PIL import Image
 from io import BytesIO
-import nest_asyncio
+#import nest_asyncio
 import re
 import os
 
 # Apply nest_asyncio to enable asyncio in nested environments like Jupyter or multi-threaded apps
-nest_asyncio.apply()
+#nest_asyncio.apply()
 
 # Bot Token and Logo URL
 BOT_TOKEN = "7660007316:AAHis4NuPllVzH-7zsYhXGfgokiBxm_Tml0"
-LOGO_URL = "http://ob.saleh-kh.lol:2082/download.php?f=BQACAgQAAxkBAAEE4uxniIBRq8FhJnz_G3lxt8k31axKZQACpxkAAsuqQVB1FZV0GOmVGy8E&s=2449394&n=Picsart_25-01-16_09-09-54-162_5783091185375517095.png&m=image%2Fpng&T=MTczNzAxMzM5NA=="
+LOGO_URL = "http://ob.saleh-kh.lol:2082/download.php?f=BQACAgQAAxkBAAEE7oJnkzKfdBkgz5m5ahAckCMwe7m0dAACvRQAArYqmVCHGFKOwTqD9i8E&s=2275515&n=Picsart_25-01-23_19-51-50-875_5807720155643385021.png&m=image%2Fpng&T=MTczNzcxNDQwMA=="
 
 # Path to save the logo
 LOGO_PATH = "downloaded_logo.png"
