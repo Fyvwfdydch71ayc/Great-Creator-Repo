@@ -22,13 +22,10 @@ async def run_bot() -> None:
     app = ApplicationBuilder().token(bot_token).build()  # Use the token
 
     # Add handlers
-  #  app.add_handler(CommandHandler("start", start))  # Start command handler
-
-    # Add handlers
-    application.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("start", start))  # Corrected this line
 
     # Use filters.ALL to capture all types of messages
-    application.add_handler(MessageHandler(filters.ALL, handle_media))
+    app.add_handler(MessageHandler(filters.ALL, handle_media))
 
     # Run the bot using asyncio
     await app.run_polling()
