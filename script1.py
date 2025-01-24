@@ -11,7 +11,8 @@ async def handle_media(update: Update, context: CallbackContext) -> None:
     # Check the type of media and handle accordingly
     if update.message.video:
         media = update.message.video
-        thumb = media.thumb  # Get the thumbnail of the video if available
+        # Videos do not have 'thumb', but we can use the 'file_id' to download the video itself
+        thumb = None  # No thumbnail for regular video
     elif update.message.photo:
         # Use the highest resolution photo (last item in the list)
         media = update.message.photo[-1]
@@ -38,10 +39,9 @@ async def handle_media(update: Update, context: CallbackContext) -> None:
         
         # Send the thumbnail to the user
         await update.message.reply_photo(photo=open(file_path, 'rb'))
-        os.remove(file_path)  # Clean up after sending the thumbnail
     else:
         await update.message.reply_text("No thumbnail or preview available for this media.")
-
+        
 # Define the /start command function
 async def start(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(
