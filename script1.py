@@ -1,13 +1,13 @@
 import asyncio
-import nest_asyncio
+#import nest_asyncio
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, CallbackContext
 
 # Apply nest_asyncio to allow running the bot in Jupyter or other nested asyncio environments
-nest_asyncio.apply()
+#nest_asyncio.apply()
 
 # Bot token
-TOKEN = "7660007316:AAHis4NuPllVzH-7zsYhXGfgokiBxm_Tml0"
+#TOKEN = "7660007316:AAHis4NuPllVzH-7zsYhXGfgokiBxm_Tml0"
 
 # Define the asynchronous function that handles incoming media messages
 async def handle_media(update: Update, context: CallbackContext) -> None:
