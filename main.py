@@ -23,7 +23,7 @@ async def run_bot() -> None:
 
 
   #  app.add_handler(CommandHandler("start", start))
-    # Use filters.ALL to capture all types of messages
+    app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.ALL, handle_media))
     # Run the bot using asyncio
     await app.run_polling()
