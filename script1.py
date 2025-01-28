@@ -8,6 +8,8 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from pymongo import MongoClient
 import re
 
+
+#chal ja randi ke
 # Apply nest_asyncio to enable running asyncio in Jupyter or similar environments
 #nest_asyncio.apply()
 
