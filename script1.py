@@ -1,54 +1,150 @@
+import logging
 import asyncio
 #import nest_asyncio
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, CommandHandler, CallbackContext
+from telegram.ext import CommandHandler, MessageHandler, filters, Application, CallbackContext
+from urllib.parse import urlparse
+import aiohttp
+from bs4 import BeautifulSoup
+from io import BytesIO
 
-# Apply nest_asyncio to allow running the bot in Jupyter or other nested asyncio environments
+# Enabling nested event loop
 #nest_asyncio.apply()
 
-# Bot token
-#TOKEN = "7660007316:AAHis4NuPllVzH-7zsYhXGfgokiBxm_Tml0"
+# Enable logging
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Define the asynchronous function that handles incoming media messages
-async def handle_media(update: Update, context: CallbackContext) -> None:
-    thumb = None
-    media = None
+# Bot token (use the token you provided here)
+#TOKEN = '7660007316:AAHis4NuPllVzH-7zsYhXGfgokiBxm_Tml0'
 
-    # Check the type of media and handle accordingly
-    if update.message.video:
-        media = update.message.video
-        thumb = media.thumb  # Get the thumbnail of the video
-    elif update.message.photo:
-        # Use the highest resolution photo (last item in the list)
-        media = update.message.photo[-1]
-        thumb = media.thumb  # Photos don't have a 'thumb', this is just an empty check
-    elif update.message.document:
-        media = update.message.document
-        thumb = media.thumb  # Documents might have a thumbnail (e.g., PDFs)
-    elif update.message.sticker:
-        media = update.message.sticker
-        thumb = media.thumb  # Stickers might have a thumbnail (preview)
-    elif update.message.animation:
-        media = update.message.animation
-        thumb = media.thumb  # GIFs also might have a thumbnail
-    elif update.message.audio:
-        media = update.message.audio
-        thumb = media.thumb  # Audio may have a thumbnail (cover image)
+# Constant for the part to remove from the title
+TERABOX_SUFFIX = " - Share Files Online & Send Larges Files with TeraBox"
+
+# Function to fetch the title and image URL of a webpage asynchronously using aiohttp
+async def get_title_and_image(session, url: str):
+    try:
+        async with session.get(url) as response:
+            response.raise_for_status()
+            html_content = await response.text()
+
+        # Parse the HTML using BeautifulSoup
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        # Extract title
+        title = soup.title.string if soup.title else "No Title Found"
+
+        # Log the title before any changes
+        logger.info(f"Original Title: {title}")
+
+        # Strip the unwanted suffix from the title if it exists
+        if title.endswith(TERABOX_SUFFIX):
+            title = title[:-len(TERABOX_SUFFIX)]  # Remove the suffix
+            logger.info(f"Modified Title: {title}")  # Log the title after modification
+
+        # Try to extract the image from Open Graph meta tag
+        image_url = None
+        og_image_tag = soup.find('meta', property='og:image')
+        if og_image_tag:
+            image_url = og_image_tag.get('content')
+
+        if image_url:
+            # Fetch the image from the URL asynchronously
+            async with session.get(image_url) as img_response:
+                img_response.raise_for_status()
+                image_data = BytesIO(await img_response.read())
+                return title.strip(), image_data
+        else:
+            return title.strip(), None
+    except Exception as e:
+        logger.error(f"Error fetching page title or image from URL: {e}")
+        return "Error", None
+
+# Function to extract the code from the link
+def extract_code_from_url(user_url: str):
+    # Extract the part of the URL after "/s/"
+    path = urlparse(user_url).path
+    if "/s/" in path:
+        code = path.split("/s/")[1]
+        # Remove the first letter if it is a number
+        if code[0].isdigit():
+            code = code[1:]
+        return code
+    return None
+
+# Function to extract all URLs from a given text
+def extract_urls(text: str):
+    # Ensure text is not None before attempting to split
+    if text:
+        return [word for word in text.split() if urlparse(word).scheme in ["http", "https"]]
+    return []
+
+# Handle messages that contain links
+async def handle_message(update: Update, context: CallbackContext) -> None:
+    # Extract all URLs from the message text (check if text is not None)
+    message_text = update.message.text if update.message.text else ""
+    urls = extract_urls(message_text)
+
+    # If message contains URLs, process them concurrently
+    if urls:
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for url in urls:
+                # If URL doesn't start with http:// or https://, add https:// by default
+                if not url.startswith(('http://', 'https://')):
+                    url = 'https://' + url
+                    logger.info(f"Protocol was missing, added https://: {url}")
+                
+                logger.info(f"Valid URL after adding protocol: {url}")
+                
+                # Extract code from the URL
+                code = extract_code_from_url(url)
+
+                if code:
+                    # Construct the new link with the extracted code
+                    new_link = f"https://www.1024terabox.com/sharing/embed?surl={code}&resolution=1080&autoplay=true&mute=false&uk=4400105884193&fid=91483455887823&slid="
+                    
+                    # Create a task for the title and image fetching
+                    tasks.append(fetch_title_and_send_image(update, session, url, new_link))
+            
+            # Run all tasks concurrently
+            await asyncio.gather(*tasks)
+
     else:
-        thumb = None
+        await update.message.reply_text("Please send a valid URL.")
 
-    if thumb:
-        # Download the thumbnail if available
-        file = await context.bot.get_file(thumb.file_id)
-        file_path = "thumbnail.jpg"  # Save the file as thumbnail.jpg
-        await file.download_to_drive(file_path)
-        
-        # Send the thumbnail to the user
-        await update.message.reply_photo(photo=open(file_path, 'rb'))
+    # Check for URLs in captions of media (ensure caption is not None)
+    if update.message.caption:
+        caption_urls = extract_urls(update.message.caption)
+        tasks = []
+        async with aiohttp.ClientSession() as session:
+            for url in caption_urls:
+                # Process the URL the same way as the text URLs
+                if not url.startswith(('http://', 'https://')):
+                    url = 'https://' + url
+                logger.info(f"URL from caption: {url}")
+                
+                # Extract code from the URL
+                code = extract_code_from_url(url)
+
+                if code:
+                    new_link = f"https://www.1024terabox.com/sharing/embed?surl={code}&resolution=1080&autoplay=true&mute=false&uk=4400105884193&fid=91483455887823&slid="
+                    tasks.append(fetch_title_and_send_image(update, session, url, new_link))
+
+            # Run all tasks concurrently
+            await asyncio.gather(*tasks)
+
+# Helper function to fetch title, image, and send message
+async def fetch_title_and_send_image(update: Update, session, url: str, new_link: str):
+    title, image_data = await get_title_and_image(session, url)
+
+    if title.endswith(TERABOX_SUFFIX):
+        title = title[:-len(TERABOX_SUFFIX)].strip()
+
+    if image_data:
+        await update.message.reply_photo(photo=image_data, caption=f"{title}\n\n{new_link}")
     else:
-        await update.message.reply_text("No thumbnail or preview available for this media.")
+        await update.message.reply_text(f"{title}\n\n{new_link}")
 
-# Define the start command handler
-async def start(update: Update, context: CallbackContext) -> None:
-    # Send a welcome message when the user starts the bot
-    await update.message.reply_text("Hello! 👋 I'm your media bot. Send me any gif, sticker, photo, video, audio, or document, and I’ll fetch its thumbnail or preview for you! Let’s get started! 🚀")
+# Main function to start the bot
