@@ -3,7 +3,7 @@ import asyncio
 import os  # Import the os module to access environment variables
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes, CallbackContext, Application# Add ConversationHandler import
-from script1 import generate_unique_code, extract_link_from_text, update_urls_for_all_links, start, delete_media_after_1_minute, handle_media, list_links, website, change_website, handle_new_website # Corrected import statement
+from script1 import extract_links, start, handle_message, done, 
 from web_server import start_web_server  # Import the web server function
 
 
@@ -24,21 +24,8 @@ async def run_bot() -> None:
 
   #  app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("start", start))
-
-    # Handler for the /list command to send all links with media type
-    app.add_handler(CommandHandler("list", list_links))
-
-    # Handler for the /website command to show and change the website
-    app.add_handler(CommandHandler("website", website))
-
-    # Handler for callback query to change the website
-    app.add_handler(CallbackQueryHandler(change_website, pattern="change_website"))
-
-    # Handler for receiving and setting the new website URL from admin
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_new_website))
-
-    # Handler for all messages from the admin (media, text, etc.)
-    app.add_handler(MessageHandler(filters.ALL, handle_media))
+    app.add_handler(CommandHandler("done", done))
+    app.add_handler(MessageHandler(filters.ALL, handle_message))
     
     await app.run_polling()
 
