@@ -3,7 +3,7 @@ import asyncio
 import os  # Import the os module to access environment variables
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes, CallbackContext, Application# Add ConversationHandler import
-from script1 import extract_links, start, handle_message, done, 
+from script1 import extract_links, start, handle_message, done
 from web_server import start_web_server  # Import the web server function
 
 
