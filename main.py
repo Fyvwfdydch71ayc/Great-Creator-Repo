@@ -3,7 +3,7 @@ import asyncio
 import os  # Import the os module to access environment variables
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes, CallbackContext, Application# Add ConversationHandler import
-from script1 import extract_links, start, handle_message, done
+from script1 import load_message_store, save_message_store, remove_urls_from_caption, extract_path_from_caption, is_member_of_channels, start, delete_after_delay, help_command, handle_message, links_command, website_command, callback_query_handler, handle_new_website, error  
 from web_server import start_web_server  # Import the web server function
 
 
@@ -24,8 +24,11 @@ async def run_bot() -> None:
 
   #  app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("done", done))
-    app.add_handler(MessageHandler(filters.ALL, handle_message))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("website", website_command))
+    app.add_handler(CommandHandler("links", links_command))
+    app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_message))
+    app.add_handler(CallbackQueryHandler(callback_query_handler))
     
     await app.run_polling()
 
