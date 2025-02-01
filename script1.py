@@ -101,6 +101,19 @@ async def is_member_of_channels(user_id, bot):
     return member_statuses
 
 # Start command handler
+
+# Move delete_after_delay outside of the start function
+async def delete_after_delay(context: ContextTypes.DEFAULT_TYPE, user_id: int, message_id: int):
+    await asyncio.sleep(60)  # Wait for 1 minute
+    try:
+        await context.bot.delete_message(
+            chat_id=user_id,
+            message_id=message_id,
+        )
+    except Exception as e:
+        logging.error(f"Failed to delete message: {e}")
+
+# Start command handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     start_param = context.args[0] if context.args else None
@@ -216,17 +229,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
 
                     # Delete the message after 1 minute (run in background)
-                    async def delete_after_delay():
-                        await asyncio.sleep(60)  # Wait for 1 minute
-                        try:
-                            await context.bot.delete_message(
-                                chat_id=user_id,
-                                message_id=sent_message.message_id,
-                            )
-                        except Exception as e:
-                            logging.error(f"Failed to delete message: {e}")
-
-                    asyncio.create_task(delete_after_delay())
+                    asyncio.create_task(delete_after_delay(context, user_id, sent_message.message_id))
 
                 except Exception as e:
                     await update.message.reply_text(f"Failed to retrieve the message. Error: {e}")
@@ -234,7 +237,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("Message not found.")
         else:
             await update.message.reply_text("Welcome! Use /help to see available commands.")
-
 # Help command handler
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
