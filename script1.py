@@ -44,7 +44,7 @@ async def get_title_and_image_and_text(session, url: str):
 
         # Extract text from the page (just the main content)
         text_content = ''
-        for p_tag in soup.find_all('p'):  # This is a simple way to extract paragraphs
+        for p_tag in soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']):  # This is a more general approach
             text_content += p_tag.get_text() + "\n"
 
         if image_url:
@@ -123,7 +123,7 @@ async def fetch_title_and_send_image(update: Update, session, url: str, new_link
         title = title[:-len(TERABOX_SUFFIX)].strip()
 
     # Prepare the message with the original link and the new link
-    message = f"{title}\n\n{new_link}\n\n{url}\n\n{text_content}"
+    message = f"{title}\n\n{new_link}\n\nOriginal URL: {url}\n\nText Content:\n{text_content}"
 
     if image_data:
         await update.message.reply_photo(photo=image_data, caption=message)
