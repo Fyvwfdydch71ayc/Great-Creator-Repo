@@ -23,6 +23,9 @@ async def get_title_and_image(session, url: str):
             response.raise_for_status()
             html_content = await response.text()
 
+        # Log the HTML content for debugging
+        logger.info(f"HTML content: {html_content[:1000]}")  # Log only the first 1000 characters to avoid large logs
+
         # Parse the HTML using BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
 
@@ -41,7 +44,13 @@ async def get_title_and_image(session, url: str):
         file_info = []
         file_pattern = r"(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\(\d+\)\.mp4)\s*\|\s*(\d{2}:\d{2}:\d{2})\s*\|\s*([\d\.]+[MB]{2})"
         
+        # Log the regex search to ensure it is checking the correct part of the HTML
         matches = re.findall(file_pattern, html_content)
+        if matches:
+            logger.info(f"Video information found: {matches}")
+        else:
+            logger.info("No video information found with regex pattern")
+
         for match in matches:
             file_info.append({
                 "filename": match[0],
