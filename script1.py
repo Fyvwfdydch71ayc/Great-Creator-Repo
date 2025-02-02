@@ -42,10 +42,25 @@ async def get_title_and_image_and_text(session, url: str):
         if og_image_tag:
             image_url = og_image_tag.get('content')
 
-        # Extract text from the page (just the main content)
+        # Attempt to extract the primary content text more aggressively
+        # We try different elements and attributes that could hold the content we need
         text_content = ''
-        for p_tag in soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']):  # This is a more general approach
-            text_content += p_tag.get_text() + "\n"
+        
+        # Attempt extracting the content from the first <div> with a certain class
+        primary_content = soup.find('div', class_='primary-content')  # Adjust this class to match the target webpage
+        if primary_content:
+            text_content = primary_content.get_text(separator="\n", strip=True)
+
+        # If no specific div found, extract text from all paragraphs
+        if not text_content:
+            for p_tag in soup.find_all('p'):
+                text_content += p_tag.get_text() + "\n"
+
+        # Fallback to extracting the entire body text if nothing above works
+        if not text_content:
+            body = soup.find('body')
+            if body:
+                text_content = body.get_text(separator="\n", strip=True)
 
         if image_url:
             # Fetch the image from the URL asynchronously
@@ -56,7 +71,7 @@ async def get_title_and_image_and_text(session, url: str):
         else:
             return title.strip(), None, text_content.strip()
     except Exception as e:
-        logger.error(f"Error fetching page title, image or text from URL: {e}")
+        logger.error(f"Error fetching page title, image, or text from URL: {e}")
         return "Error", None, ""
 
 # Function to extract the code from the link
