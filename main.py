@@ -3,7 +3,7 @@ import asyncio
 import os  # Import the os module to access environment variables
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes, CallbackContext, Application
-from script1 import get_title_and_image_and_text, extract_code_from_url, extract_urls, handle_message, fetch_title_and_send_image  # Corrected import statement
+from script1 import generate_unique_code, generate_qr_code, start, delete_old_messages, delete_all_messages, handle_payment_update,  # Corrected import statement
 from web_server import start_web_server  # Import the web server function
 
 # Set up logging
@@ -20,8 +20,14 @@ async def run_bot() -> None:
     app = ApplicationBuilder().token(bot_token).build()  # Use the token
 
     # app.add_handler(CommandHandler("start", start))  # Uncomment if you have a start function
-    app.add_handler(MessageHandler(filters.ALL, handle_message))
-    
+        start_handler = CommandHandler('start', start)
+    delete_handler = CommandHandler('delete', delete_all_messages)
+    payment_update_handler = MessageHandler(filters.TEXT, handle_payment_update)
+
+    app.add_handler(start_handler)
+    app.add_handler(delete_handler)
+    app.add_handler(payment_update_handler)
+
     await app.run_polling()
 
 async def main() -> None:
