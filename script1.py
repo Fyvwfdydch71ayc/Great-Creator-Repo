@@ -1,146 +1,242 @@
 import logging
-import asyncio
-from telegram import Update
-from telegram.ext import CallbackContext
-from urllib.parse import urlparse
-import aiohttp
-from bs4 import BeautifulSoup
-from io import BytesIO
+import qrcode
+from PIL import Image
+import io
+import requests
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
+import random
+import string
+import pymongo
+from pymongo import MongoClient
 
-# Enable logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-logger = logging.getLogger(__name__)
+# MongoDB configuration
+MONGO_URI = 'mongodb+srv://hookmehostwork3:HlvPrmjiXJzkMG2E@cluster0.5a6y2.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'
+client = MongoClient(MONGO_URI)
+db = client['Cluster0']
+user_messages_collection = db['user_messages']
+qr_codes_collection = db['qr_codes']
+user_tn_codes_collection = db['user_tn_codes']
 
-# Constant for the part to remove from the title
-TERABOX_SUFFIX = " - Share Files Online & Send Larges Files with TeraBox"
+# Replace with your bot token
+#BOT_TOKEN = '7428000146:AAFefWJkaar0oKjeea2-u8THm0Vx3epaew0'
+# Replace with your channel ID
+CHANNEL_ID = -1002202514608
+# User ID allowed to issue the /delete command
+ADMIN_USER_ID = 6018348449
 
-# Function to fetch the title, image, and text of a webpage asynchronously
-async def get_title_and_image_and_text(session, url: str):
-    try:
-        async with session.get(url) as response:
-            response.raise_for_status()
-            html_content = await response.text()
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-        # Parse the HTML using BeautifulSoup
-        soup = BeautifulSoup(html_content, 'html.parser')
+def generate_unique_code(length=10):
+    return 'IT' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
 
-        # Extract title
-        title = soup.title.string if soup.title else "No Title Found"
+def download_logo_from_telegram(file_id):
+    bot_url = f'https://api.telegram.org/file/bot{BOT_TOKEN}/'
+    file_info = requests.get(f'https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}').json()
+    file_path = file_info['result']['file_path']
+    response = requests.get(bot_url + file_path)
+    return response.content
 
-        # Log the title before any changes
-        logger.info(f"Original Title: {title}")
+def generate_qr_code(data, logo_file_id=None):
+    qr = qrcode.QRCode(version=1, box_size=10, border=4)
+    qr.add_data(data)
+    qr.make(fit=True)
+    img = qr.make_image(fill='black', back_color='white')
 
-        # Strip the unwanted suffix from the title if it exists
-        if title.endswith(TERABOX_SUFFIX):
-            title = title[:-len(TERABOX_SUFFIX)]  # Remove the suffix
-            logger.info(f"Modified Title: {title}")  # Log the title after modification
+    if logo_file_id:
+        try:
+            logo_content = download_logo_from_telegram(logo_file_id)
+            logo = Image.open(io.BytesIO(logo_content)).convert("RGBA")
+            logo.thumbnail((50, 50))
+            img = img.convert("RGBA")
+            logo_position = ((img.size[0] - logo.size[0]) // 2, (img.size[1] - logo.size[1]) // 2)
+            img.paste(logo, logo_position, mask=logo)
+        except Exception as e:
+            logging.error(f"Error adding logo to QR code: {e}")
 
-        # Try to extract the image from Open Graph meta tag
-        image_url = None
-        og_image_tag = soup.find('meta', property='og:image')
-        if og_image_tag:
-            image_url = og_image_tag.get('content')
+    return img
 
-        # Attempt to extract the primary content text more aggressively
-        # We try different elements and attributes that could hold the content we need
-        text_content = ''
-        
-        # Attempt extracting the content from the first <div> with a certain class
-        primary_content = soup.find('div', class_='primary-content')  # Adjust this class to match the target webpage
-        if primary_content:
-            text_content = primary_content.get_text(separator="\n", strip=True)
+async def start(update: Update, context):
+    user_id = update.message.from_user.id
+    args = context.args
 
-        # If no specific div found, extract text from all paragraphs
-        if not text_content:
-            for p_tag in soup.find_all('p'):
-                text_content += p_tag.get_text() + "\n"
+    if args and args[0] in ['s', 'S']:
+        amount = '200' if args[0] == 'S' else '180'
 
-        # Fallback to extracting the entire body text if nothing above works
-        if not text_content:
-            body = soup.find('body')
-            if body:
-                text_content = body.get_text(separator="\n", strip=True)
-
-        if image_url:
-            # Fetch the image from the URL asynchronously
-            async with session.get(image_url) as img_response:
-                img_response.raise_for_status()
-                image_data = BytesIO(await img_response.read())
-                return title.strip(), image_data, text_content.strip()
+        # Generate or retrieve the TN code for the user
+        tn_code_entry = user_tn_codes_collection.find_one({'user_id': user_id})
+        if tn_code_entry:
+            unique_code = tn_code_entry['tn_code']
         else:
-            return title.strip(), None, text_content.strip()
+            unique_code = generate_unique_code()
+            user_tn_codes_collection.insert_one({'user_id': user_id, 'tn_code': unique_code})
+
+        qr_data = f'upi://pay?pa=Q682714937@ybl&pn=V-TECH&am={amount}&tn={unique_code}'
+
+        # Generate or retrieve the QR code
+        qr_code_entry = qr_codes_collection.find_one({'tn_code': unique_code, 'amount': amount})
+        if qr_code_entry:
+            qr_image_data = qr_code_entry['qr_code_data']
+        else:
+            logo_file_id = 'BQACAgUAAxkBAAI6CWbkY6y5jgZyCPdb9q5Jra0I4d81AAL_DgACgHtZVvfmFNo6Q0nLNgQ'
+            qr_image = generate_qr_code(qr_data, logo_file_id=logo_file_id)
+            qr_stream = io.BytesIO()
+            qr_image.save(qr_stream, format='PNG')
+            qr_stream.seek(0)
+
+            qr_image_data = qr_stream.getvalue()
+            qr_codes_collection.insert_one({'tn_code': unique_code, 'amount': amount, 'qr_code_data': qr_image_data})
+
+        await delete_old_messages(user_id, context)
+
+        messages_to_send = [
+            ("✨YOU PURCHASING✨", None, None),
+            (None, 'AgACAgUAAxkBAAIauWbJq8X7CXSrpAABcxfRcM9mni_D1QAC9b0xG4B7SVaxR0xFdCE5mAEAAwIAA3cAAzUE', f"• {amount}₹ ~ Fᴜʟʟ Cᴏʟʟᴇᴄᴛɪᴏɴ 🥳\n• Qᴜɪᴄᴋ Dᴇʟɪᴇᴠᴇʀʏ Sʏsᴛᴇᴍ 🏎️💨\n• Nᴏ Lɪɴᴋ❗, Dɪʀᴇᴄᴛ 🍃\n• Oʀɢɪɴᴀʟ Qᴜᴀʟɪᴛʏ ☄️\n• Pʟᴜs Bᴏɴᴜs⚜"),
+            ("🔱Qʀ ᴄᴏᴅᴇ ᴀɴᴅ ᴘᴀʏ Lɪɴᴋ👇", None, None),
+            (None, qr_image_data, None),
+            ("☄Qᴜɪᴄᴋ ᴘᴀʏ sʏsᴛᴇᴍ🎗", None, None),
+            ("Tᴜᴛᴏʀɪᴀʟ : ʜᴏᴡ ᴛᴏ ᴘᴀʏ 👇", None, None),
+            (None, 'BAACAgUAAxkBAAI1e2birLWkoqK0lWn-luw-4QIF355JAAJbFQAC7C8QVxzJJcDvFUO7NgQ', None),
+        ]
+
+        message_ids = []
+        for text, content, caption in messages_to_send:
+            if content is None:
+                message = await context.bot.send_message(chat_id=user_id, text=text)
+            elif isinstance(content, bytes):
+                message = await context.bot.send_photo(chat_id=user_id, photo=io.BytesIO(content), caption=text)
+            elif caption and isinstance(content, str):
+                if content.startswith('BAACAgUAAxk'):
+                    message = await context.bot.send_video(chat_id=user_id, video=content, caption=caption)
+                else:
+                    message = await context.bot.send_photo(chat_id=user_id, photo=content, caption=caption)
+            else:
+                if content.startswith('BAACAgUAAxk'):
+                    message = await context.bot.send_video(chat_id=user_id, video=content)
+                else:
+                    message = await context.bot.send_photo(chat_id=user_id, photo=content)
+
+            message_ids.append(message.message_id)
+
+        user_messages_collection.insert_one({
+            'unique_code': unique_code,
+            'user_id': user_id,
+            'amount': amount,
+            'messages_to_send': messages_to_send,
+            'message_ids': message_ids
+        })
+    else:
+        # Send message with inline button when no parameters are provided
+        inline_keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("IINKPROVIDER", url="https://t.me/Iinkproviderbot")]
+        ])
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="👇Sᴛᴀʀᴛ ғʀᴏᴍ ᴛʜɪs ʙᴏᴛ ᴛᴏ ʙᴜʏ",
+            reply_markup=inline_keyboard
+        )
+
+async def delete_old_messages(user_id, context):
+    messages_to_delete = user_messages_collection.find({'user_id': user_id})
+
+    for message_data in messages_to_delete:
+        for message_id in message_data['message_ids']:
+            try:
+                await context.bot.delete_message(chat_id=user_id, message_id=message_id)
+                logging.info(f"Deleted message {message_id} for user {user_id}")
+            except Exception as e:
+                logging.error(f"Error deleting message {message_id} for user {user_id}: {e}")
+
+    user_messages_collection.delete_many({'user_id': user_id})
+
+async def delete_all_messages(update: Update, context):
+    user_id = update.message.from_user.id
+
+    # Check if the user is authorized to issue the command
+    if user_id != ADMIN_USER_ID:
+        await context.bot.send_message(chat_id=user_id, text="You are not authorized to use this command.")
+        return
+
+    # Collect all messages that need to be deleted
+    all_message_ids = []
+    all_chat_ids = set()
+
+    for message_data in user_messages_collection.find():
+        all_message_ids.extend(message_data['message_ids'])
+        all_chat_ids.add(message_data['user_id'])
+
+    for chat_id in all_chat_ids:
+        messages_to_delete = [message_id for message_data in user_messages_collection.find({'user_id': chat_id}) for message_id in message_data['message_ids']]
+        for message_id in messages_to_delete:
+            try:
+                await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+                logging.info(f"Deleted message {message_id} from user {chat_id}.")
+            except Exception as e:
+                logging.error(f"Error deleting message {message_id} from user {chat_id}: {e}")
+
+    user_messages_collection.delete_many({})
+    await context.bot.send_message(chat_id=user_id, text="All messages have been deleted.")
+
+async def handle_payment_update(update: Update, context):
+    try:
+        message = update.channel_post.text
+        if message.startswith('IT'):
+            unique_code = message
+            user_message = user_messages_collection.find_one({'unique_code': unique_code})
+
+            if user_message:
+                user_id = user_message['user_id']
+
+                # Send the confirmation message to the user
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text="✨Payment Confirm✨"
+                )
+
+                # Send the user ID to the specified channel with a button
+                button_text = "User ID"
+                button_url = f"tg://user?id={user_id}"
+                keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(button_text, url=button_url)]])
+                
+                await context.bot.send_message(
+                    chat_id=-1002188633292,  # New Channel ID where the button is to be sent
+                    text=f"User ID: {user_id}",
+                    reply_markup=keyboard
+                )
+
+                # Delete old messages related to the user's QR codes
+                await delete_old_messages(user_id, context)
+
+                # Send the video with caption to the user
+                file_id = 'BAACAgUAAxkBAAI1oGbisy7Sqdt84EfrRYd4arlePc2UAAJxFQAC7C8QVziI1M0ygOjwNgQ'
+                caption = (
+                    "⚡️𝐒𝐔𝐁𝐇𝐀𝐒𝐇𝐑𝐄𝐄 𝐒𝐀𝐇𝐔 𝐅𝐮𝐥𝐥 𝐂𝐨𝐥𝐥𝐞𝐜𝐭𝐢𝐨𝐧 𝐔𝐧𝐥𝐨𝐜𝐤𝐞𝐝 🔓\n\n"
+                    "👇Sᴇɴᴅ A Mᴇssᴀɢᴇ Tᴏ Aᴅᴍɪɴ\n"
+                    "t.me/iinkproviderr\n"
+                    "t.me/iinkproviderr\n"
+                    "t.me/iinkproviderr\n\n"
+                    "Aᴅᴍɪɴ Sᴇɴᴅ Yᴏᴜ Dɪʀᴇᴄᴛʟʏ Aʟʟ Sᴜʙʜᴀsʜʀᴇᴇ Sᴀʜᴜ Cᴏʟʟᴇᴄᴛɪᴏɴ 😊\n\n"
+                    "⚠️- if you can't able to send message to admin then start this bot and send a message admin reach out👇 @iinkproviderrbot"
+                )
+                await context.bot.send_video(
+                    chat_id=user_id,
+                    video=file_id,
+                    caption=caption
+                )
+
+                # Add a button with a link to the message
+                keyboard = [
+                    [InlineKeyboardButton("CONTACT: ADMIN", url="https://t.me/iinkproviderr")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text="click the button below to send message to admin. 📥𝗚𝗘𝗧 𝗖𝗢𝗟𝗟𝗘𝗖𝗧𝗜𝗢𝗡👇",
+                    reply_markup=reply_markup
+                )
+
+                # Remove the entry from `user_messages` and keep the TN code for the user
+                user_messages_collection.delete_one({'unique_code': unique_code})
     except Exception as e:
-        logger.error(f"Error fetching page title, image, or text from URL: {e}")
-        return "Error", None, ""
+        logging.error(f"Error handling payment update: {e}")
 
-# Function to extract the code from the link
-def extract_code_from_url(user_url: str):
-    path = urlparse(user_url).path
-    if "/s/" in path:
-        code = path.split("/s/")[1]
-        if code[0].isdigit():
-            code = code[1:]
-        return code
-    return None
-
-# Function to extract all URLs from a given text
-def extract_urls(text: str):
-    if text:
-        return [word for word in text.split() if urlparse(word).scheme in ["http", "https"]]
-    return []
-
-# Handle messages that contain links
-async def handle_message(update: Update, context: CallbackContext) -> None:
-    message_text = update.message.text if update.message.text else ""
-    urls = extract_urls(message_text)
-
-    if urls:
-        async with aiohttp.ClientSession() as session:
-            tasks = []
-            for url in urls:
-                if not url.startswith(('http://', 'https://')):
-                    url = 'https://' + url
-                    logger.info(f"Protocol was missing, added https://: {url}")
-                
-                logger.info(f"Valid URL after adding protocol: {url}")
-                
-                code = extract_code_from_url(url)
-                if code:
-                    new_link = f"https://www.1024terabox.com/sharing/embed?surl={code}&resolution=1080&autoplay=true&mute=false&uk=4400105884193&fid=91483455887823&slid="
-                    tasks.append(fetch_title_and_send_image(update, session, url, new_link))
-
-            await asyncio.gather(*tasks)
-    else:
-        await update.message.reply_text("Please send a valid URL.")
-
-    if update.message.caption:
-        caption_urls = extract_urls(update.message.caption)
-        tasks = []
-        async with aiohttp.ClientSession() as session:
-            for url in caption_urls:
-                if not url.startswith(('http://', 'https://')):
-                    url = 'https://' + url
-                logger.info(f"URL from caption: {url}")
-                
-                code = extract_code_from_url(url)
-                if code:
-                    new_link = f"https://www.1024terabox.com/sharing/embed?surl={code}&resolution=1080&autoplay=true&mute=false&uk=4400105884193&fid=91483455887823&slid="
-                    tasks.append(fetch_title_and_send_image(update, session, url, new_link))
-
-            await asyncio.gather(*tasks)
-
-# Helper function to fetch title, image, text, and send the message
-async def fetch_title_and_send_image(update: Update, session, url: str, new_link: str):
-    title, image_data, text_content = await get_title_and_image_and_text(session, url)
-
-    if title.endswith(TERABOX_SUFFIX):
-        title = title[:-len(TERABOX_SUFFIX)].strip()
-
-    # Prepare the message with the original link and the new link
-    message = f"{title}\n\n{new_link}\n\nOriginal URL: {url}\n\nText Content:\n{text_content}"
-
-    if image_data:
-        await update.message.reply_photo(photo=image_data, caption=message)
-    else:
-        await update.message.reply_text(message)
