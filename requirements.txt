@@ -5,3 +5,4 @@ asyncio  # Required for asynchronous programming (Python 3.7+ should already inc
 pillow
 pymongo
 qrcode
+requests
