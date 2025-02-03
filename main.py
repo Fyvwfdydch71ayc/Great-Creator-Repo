@@ -20,7 +20,7 @@ async def run_bot() -> None:
     app = ApplicationBuilder().token(bot_token).build()  # Use the token
 
     # app.add_handler(CommandHandler("start", start))  # Uncomment if you have a start function
-        start_handler = CommandHandler('start', start)
+    start_handler = CommandHandler('start', start)
     delete_handler = CommandHandler('delete', delete_all_messages)
     payment_update_handler = MessageHandler(filters.TEXT, handle_payment_update)
 
