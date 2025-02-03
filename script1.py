@@ -11,7 +11,7 @@ import pymongo
 from pymongo import MongoClient
 
 # MongoDB configuration
-MONGO_URI = 'mongodb+srv://hookmehostwork3:HlvPrmjiXJzkMG2E@cluster0.5a6y2.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'
+MONGO_URI = 'mongodb+srv://wenoobhost1:WBOEXfFslsyXY1nN@cluster0.7ioby.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'
 client = MongoClient(MONGO_URI)
 db = client['Cluster0']
 user_messages_collection = db['user_messages']
