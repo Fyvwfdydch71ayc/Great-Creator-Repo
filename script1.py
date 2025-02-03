@@ -21,9 +21,9 @@ user_tn_codes_collection = db['user_tn_codes']
 # Replace with your bot token
 #BOT_TOKEN = '7428000146:AAFefWJkaar0oKjeea2-u8THm0Vx3epaew0'
 # Replace with your channel ID
-CHANNEL_ID = -1002202514608
+CHANNEL_ID = -1002301680804
 # User ID allowed to issue the /delete command
-ADMIN_USER_ID = 6018348449
+ADMIN_USER_ID = 7144181041
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -78,7 +78,7 @@ async def start(update: Update, context):
         if qr_code_entry:
             qr_image_data = qr_code_entry['qr_code_data']
         else:
-            logo_file_id = 'BQACAgUAAxkBAAI6CWbkY6y5jgZyCPdb9q5Jra0I4d81AAL_DgACgHtZVvfmFNo6Q0nLNgQ'
+            logo_file_id = 'BQACAgUAAxkBAAOFZuXv8SPbZelS-gE53dNnyPZxxoEAAv8OAAKAe1lWvt2DsZHCldQ2BA'
             qr_image = generate_qr_code(qr_data, logo_file_id=logo_file_id)
             qr_stream = io.BytesIO()
             qr_image.save(qr_stream, format='PNG')
@@ -91,12 +91,12 @@ async def start(update: Update, context):
 
         messages_to_send = [
             ("✨YOU PURCHASING✨", None, None),
-            (None, 'AgACAgUAAxkBAAIauWbJq8X7CXSrpAABcxfRcM9mni_D1QAC9b0xG4B7SVaxR0xFdCE5mAEAAwIAA3cAAzUE', f"• {amount}₹ ~ Fᴜʟʟ Cᴏʟʟᴇᴄᴛɪᴏɴ 🥳\n• Qᴜɪᴄᴋ Dᴇʟɪᴇᴠᴇʀʏ Sʏsᴛᴇᴍ 🏎️💨\n• Nᴏ Lɪɴᴋ❗, Dɪʀᴇᴄᴛ 🍃\n• Oʀɢɪɴᴀʟ Qᴜᴀʟɪᴛʏ ☄️\n• Pʟᴜs Bᴏɴᴜs⚜"),
+            (None, 'AgACAgUAAxkBAAMDZuLGJEbWoqAogU2QF5yO45ByPwgAAim_MRukShlXvJeP2v8lCGEBAAMCAAN3AAM2BA', f"• {amount}₹ ~ Fᴜʟʟ Cᴏʟʟᴇᴄᴛɪᴏɴ 🥳\n• Qᴜɪᴄᴋ Dᴇʟɪᴇᴠᴇʀʏ Sʏsᴛᴇᴍ 🏎️💨\n• Nᴏ Lɪɴᴋ❗, Dɪʀᴇᴄᴛ 🍃\n• Oʀɢɪɴᴀʟ Qᴜᴀʟɪᴛʏ ☄️\n• Pʟᴜs Bᴏɴᴜs⚜"),
             ("🔱Qʀ ᴄᴏᴅᴇ ᴀɴᴅ ᴘᴀʏ Lɪɴᴋ👇", None, None),
             (None, qr_image_data, None),
             ("☄Qᴜɪᴄᴋ ᴘᴀʏ sʏsᴛᴇᴍ🎗", None, None),
             ("Tᴜᴛᴏʀɪᴀʟ : ʜᴏᴡ ᴛᴏ ᴘᴀʏ 👇", None, None),
-            (None, 'BAACAgUAAxkBAAI1e2birLWkoqK0lWn-luw-4QIF355JAAJbFQAC7C8QVxzJJcDvFUO7NgQ', None),
+            (None, 'BAACAgUAAxkBAAMFZuLGKmB4d5walYerbRzaTrpAQdoAAh0VAAKkShlX7fOyuIXrOyk2BA', None),
         ]
 
         message_ids = []
@@ -199,7 +199,7 @@ async def handle_payment_update(update: Update, context):
                 keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(button_text, url=button_url)]])
                 
                 await context.bot.send_message(
-                    chat_id=-1002188633292,  # New Channel ID where the button is to be sent
+                    chat_id=-1002315192547,  # New Channel ID where the button is to be sent
                     text=f"User ID: {user_id}",
                     reply_markup=keyboard
                 )
@@ -208,7 +208,7 @@ async def handle_payment_update(update: Update, context):
                 await delete_old_messages(user_id, context)
 
                 # Send the video with caption to the user
-                file_id = 'BAACAgUAAxkBAAI1oGbisy7Sqdt84EfrRYd4arlePc2UAAJxFQAC7C8QVziI1M0ygOjwNgQ'
+                file_id = 'BAACAgUAAxkBAAMHZuLGLkRq4Ej1PekdoULAdoyIeMUAAnEVAALsLxBXCdaESjhVUag2BA'
                 caption = (
                     "⚡️𝐒𝐔𝐁𝐇𝐀𝐒𝐇𝐑𝐄𝐄 𝐒𝐀𝐇𝐔 𝐅𝐮𝐥𝐥 𝐂𝐨𝐥𝐥𝐞𝐜𝐭𝐢𝐨𝐧 𝐔𝐧𝐥𝐨𝐜𝐤𝐞𝐝 🔓\n\n"
                     "👇Sᴇɴᴅ A Mᴇssᴀɢᴇ Tᴏ Aᴅᴍɪɴ\n"
