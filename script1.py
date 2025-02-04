@@ -66,7 +66,7 @@ subscription_function_enabled = True  # enforce daily limit for non‑premium us
 FIRST_POST, LAST_POST = range(2)
 
 # Bot & Channel Configuration
-BOT_TOKEN = "7660007316:AAHis4NuPllVzH-7zsYhXGfgokiBxm_Tml0"
+#BOT_TOKEN = "7660007316:AAHis4NuPllVzH-7zsYhXGfgokiBxm_Tml0"
 DB_CHANNEL = -1002479661811
 ADMIN_ID = 6773787379
 SUBS_CHANNEL = -1002278982228
