@@ -32,7 +32,7 @@ from script1 import (
     load_data_from_mongo, save_data, delete_later, check_required_channels, send_stored_message, 
     start_cmd, betch, process_first_post, process_last_post, broadcast_handler, setting_cmd, 
     export_data, list_links, website_handler, button_handler, handle_website_update, 
-    subscription_listener, plan, pay_command, users_command, help_command, mongodb_info, 
+    subscription_listener, plan, pay_command, users_command, help_command, 
     check_expired_subscriptions, on_startup,
     FIRST_POST, LAST_POST, ADMIN_ID, SUBS_CHANNEL, BROADCAST_CHANNEL  # Import required constants
 )
@@ -73,7 +73,6 @@ async def run_bot() -> None:
     app.add_handler(CommandHandler('pay', pay_command))
     app.add_handler(CommandHandler('users', users_command))
     app.add_handler(CommandHandler('help', help_command))
-    app.add_handler(CommandHandler('MongoDB', mongodb_info))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_website_update))
     app.add_handler(MessageHandler(filters.Chat(SUBS_CHANNEL), subscription_listener))
