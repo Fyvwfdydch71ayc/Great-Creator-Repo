@@ -1,8 +1,6 @@
 import asyncio
 import csv
 import io
-import json
-#import nest_asyncio
 import logging
 import os
 import re
@@ -28,23 +26,46 @@ from telegram.ext import (
     filters
 )
 
-# Import Motor (async MongoDB driver)
+# ----------------------
+# MongoDB Setup (Motor)
+# ----------------------
 from motor.motor_asyncio import AsyncIOMotorClient
 
-#nest_asyncio.apply()
-
-# ----------------------
-# MongoDB Configuration
-# ----------------------
+# MongoDB configuration
 MONGO_URL = "mongodb+srv://wenoobhosttest1:lovedogswetest81@cluster0.4lf5x.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-mongo_client = AsyncIOMotorClient(MONGO_URL)
-db = mongo_client["Cluster0"]
-# We'll use a collection named "persistent_data" to store our single document.
-persistent_collection = db["persistent_data"]
+DB_NAME = "Cluster0"
+client = AsyncIOMotorClient(MONGO_URL)
+mongo_db = client[DB_NAME]
+# We will use one collection ("global_data") to store all persistent variables
+data_collection = mongo_db["global_data"]
 
 # ----------------------
-# Bot & Channel Configuration
+# Global Variables (Persistent Data)
 # ----------------------
+# These will be loaded from MongoDB on startup and saved back as needed.
+user_usage = {}         # {user_id (str): {'link': link_id, 'timestamp': datetime}}
+subscriptions = {}      # {user_id (str): {'purchased': datetime, 'expiry': datetime, 'expired_notified': bool}}
+website_db = {"current": "https://google.com/"}  # Base URL for parameter link mini apps.
+param_links = {}        # {link_id: {"start": int, "end": int, "created": datetime, "urls": [...], "messages": [...]}}
+daily_param_links_counter = {}  # {date_string: int}
+daily_users_set = set()         # set of user_id (str)
+
+# ----------------------
+# Runtime‐Only Globals
+# ----------------------
+pending_deletes = []  # List of dicts: {'chat_id': ..., 'message_id': ..., 'task': ...}
+all_users = set()     # set of user_id (int)
+
+# ----------------------
+# Other Settings
+# ----------------------
+auto_delete_timer = 3600  # seconds
+subscription_function_enabled = True  # enforce daily limit for non‑premium users
+
+# State constants for conversation
+FIRST_POST, LAST_POST = range(2)
+
+# Bot & Channel Configuration
 #BOT_TOKEN = "7660007316:AAHis4NuPllVzH-7zsYhXGfgokiBxm_Tml0"
 DB_CHANNEL = -1002479661811
 ADMIN_ID = 6773787379
@@ -58,32 +79,6 @@ INVITE_LINKS = {
     -1002315588145: "https://t.me/+tCyah29hMTtjNTBk",
 }
 
-# ----------------------
-# Persistent Data (loaded from MongoDB)
-# ----------------------
-# These globals will be loaded from (and saved to) MongoDB.
-user_usage = {}         # {user_id (str): {'link': link_id, 'timestamp': datetime}}
-subscriptions = {}      # {user_id (str): {'purchased': datetime, 'expiry': datetime, 'expired_notified': bool}}
-website_db = {"current": "https://google.com/"}  # Base URL for parameter link mini apps.
-param_links = {}        # {link_id: {"start": int, "end": int, "created": datetime, "urls": [...], "messages": [...]}}
-daily_param_links_counter = {}  # {date_string: int}
-daily_users_set = set()         # set of user_id (str)
-
-# ----------------------
-# Runtime‐only Globals
-# ----------------------
-pending_deletes = []  # List of dicts: {'chat_id': ..., 'message_id': ..., 'task': ...}
-all_users = set()     # set of user_id (int)
-
-# ----------------------
-# Settings (in‑memory)
-# ----------------------
-auto_delete_timer = 3600  # seconds
-subscription_function_enabled = True  # enforce daily limit for non‑premium users
-
-# Conversation states
-FIRST_POST, LAST_POST = range(2)
-
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -94,97 +89,43 @@ logger = logging.getLogger(__name__)
 # ----------------------
 # MongoDB Persistence Helpers
 # ----------------------
-def serialize_data() -> dict:
-    """Prepare the persistent data for saving (convert datetime objects to ISO strings)."""
+async def load_data():
+    """
+    Load persistent data from MongoDB. If no document exists,
+    initialize with default values and save.
+    """
+    global user_usage, subscriptions, website_db, param_links, daily_param_links_counter, daily_users_set
+    doc = await data_collection.find_one({"_id": "global_data"})
+    if doc:
+        user_usage = doc.get("user_usage", {})
+        subscriptions = doc.get("subscriptions", {})
+        website_db = doc.get("website_db", {"current": "https://google.com/"})
+        param_links = doc.get("param_links", {})
+        daily_param_links_counter = doc.get("daily_param_links_counter", {})
+        daily_users_set = set(doc.get("daily_users_set", []))
+    else:
+        user_usage = {}
+        subscriptions = {}
+        website_db = {"current": "https://google.com/"}
+        param_links = {}
+        daily_param_links_counter = {}
+        daily_users_set = set()
+        await save_data()
+
+async def save_data():
+    """
+    Save all persistent data to MongoDB.
+    """
     data = {
-        "user_usage": {
-            uid: {"link": info["link"],
-                  "timestamp": info["timestamp"].isoformat() if isinstance(info["timestamp"], datetime) else info["timestamp"]}
-            for uid, info in user_usage.items()
-        },
-        "subscriptions": {
-            uid: {"purchased": info["purchased"].isoformat() if isinstance(info["purchased"], datetime) else info["purchased"],
-                  "expiry": info["expiry"].isoformat() if isinstance(info["expiry"], datetime) else info["expiry"],
-                  "expired_notified": info.get("expired_notified", False)}
-            for uid, info in subscriptions.items()
-        },
+        "_id": "global_data",
+        "user_usage": user_usage,
+        "subscriptions": subscriptions,
         "website_db": website_db,
-        "param_links": {
-            lid: {"start": info["start"],
-                  "end": info["end"],
-                  "created": info["created"].isoformat() if isinstance(info["created"], datetime) else info["created"],
-                  "urls": info.get("urls", []),
-                  "messages": info.get("messages", [])}
-            for lid, info in param_links.items()
-        },
+        "param_links": param_links,
         "daily_param_links_counter": daily_param_links_counter,
         "daily_users_set": list(daily_users_set)
     }
-    data["_id"] = "persistent_data"
-    return data
-
-async def save_data():
-    """Save the global persistent data to MongoDB."""
-    data = serialize_data()
-    try:
-        await persistent_collection.replace_one({"_id": "persistent_data"}, data, upsert=True)
-    except Exception as e:
-        logger.error(f"Error saving data to MongoDB: {e}")
-
-async def load_data_from_mongo():
-    """Load the persistent data from MongoDB into globals."""
-    global user_usage, subscriptions, website_db, param_links, daily_param_links_counter, daily_users_set
-    doc = await persistent_collection.find_one({"_id": "persistent_data"})
-    if doc:
-        try:
-            user_usage_raw = doc.get("user_usage", {})
-            new_user_usage = {}
-            for uid, info in user_usage_raw.items():
-                try:
-                    new_user_usage[uid] = {"link": info["link"],
-                                           "timestamp": datetime.fromisoformat(info["timestamp"])}
-                except Exception:
-                    new_user_usage[uid] = info
-            user_usage = new_user_usage
-
-            subscriptions_raw = doc.get("subscriptions", {})
-            new_subscriptions = {}
-            for uid, info in subscriptions_raw.items():
-                try:
-                    new_subscriptions[uid] = {
-                        "purchased": datetime.fromisoformat(info["purchased"]),
-                        "expiry": datetime.fromisoformat(info["expiry"]),
-                        "expired_notified": info.get("expired_notified", False)
-                    }
-                except Exception:
-                    new_subscriptions[uid] = info
-            subscriptions = new_subscriptions
-
-            website_db = doc.get("website_db", {"current": "https://google.com/"})
-
-            param_links_raw = doc.get("param_links", {})
-            new_param_links = {}
-            for lid, info in param_links_raw.items():
-                try:
-                    created = datetime.fromisoformat(info["created"])
-                except Exception:
-                    created = datetime.now()
-                new_param_links[lid] = {
-                    "start": info["start"],
-                    "end": info["end"],
-                    "created": created,
-                    "urls": info.get("urls", []),
-                    "messages": info.get("messages", [])
-                }
-            param_links = new_param_links
-
-            daily_param_links_counter = doc.get("daily_param_links_counter", {})
-            daily_users_set = set(doc.get("daily_users_set", []))
-            logger.info("Persistent data loaded from MongoDB.")
-        except Exception as e:
-            logger.error(f"Error processing data from MongoDB: {e}")
-    else:
-        logger.info("No persistent data found in MongoDB; using defaults.")
+    await data_collection.replace_one({"_id": "global_data"}, data, upsert=True)
 
 
 # ----------------------
@@ -259,24 +200,18 @@ def create_custom_url_buttons(text: str) -> (str, InlineKeyboardMarkup):
     inline_markup = InlineKeyboardMarkup(buttons) if buttons else None
     return cleaned_text, inline_markup
 
-# ----------------------
-# Sending Stored Parameter-Link Messages
-# ----------------------
 async def send_stored_message(user_id: int, msg_data: dict, context: ContextTypes.DEFAULT_TYPE):
     original_content = msg_data.get("original", "")
     old_base = msg_data.get("website", "https://google.com/").rstrip('/')
     new_base = website_db["current"].rstrip('/')
     inline_buttons = []
-    # For each URL found, create two buttons (mini app and regular link)
     pattern = re.compile(rf"({re.escape(old_base)}/\S*)")
     for match in pattern.finditer(original_content):
         old_url = match.group(1)
         suffix = old_url[len(old_base):]
         new_url = new_base + suffix
-        mini_app_button = InlineKeyboardButton("Open Mini App", web_app=WebAppInfo(url=new_url))
-        url_button = InlineKeyboardButton("Open Link", url=new_url)
-        inline_buttons.append([mini_app_button])
-        inline_buttons.append([url_button])
+        button = InlineKeyboardButton("Open Mini App", web_app=WebAppInfo(url=new_url))
+        inline_buttons.append([button])
     inline_markup = InlineKeyboardMarkup(inline_buttons) if inline_buttons else None
 
     if msg_data["type"] == "text":
@@ -345,7 +280,8 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "/setting - Manage settings\n"
                 "/export - Export data as CSV\n"
                 "/users - View user stats\n"
-                "/plan - View your subscription plan")
+                "/plan - View your subscription plan\n"
+                "/MongoDB - Show MongoDB info")
     else:
         text = "💋 Get more categories 👇"
         keyboard = [[InlineKeyboardButton("Join - HotError", url="https://t.me/HotError")]]
@@ -579,10 +515,9 @@ async def export_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     subs_writer = csv.writer(subs_io)
     subs_writer.writerow(["user_id", "purchased", "expiry", "expired_notified"])
     for uid, data in subscriptions.items():
-        subs_writer.writerow([uid,
-                              data["purchased"].strftime("%Y-%m-%d %H:%M:%S"),
-                              data["expiry"].strftime("%Y-%m-%d %H:%M:%S"),
-                              data.get("expired_notified", False)])
+        purchased = data["purchased"].strftime("%Y-%m-%d %H:%M:%S") if isinstance(data["purchased"], datetime) else data["purchased"]
+        expiry = data["expiry"].strftime("%Y-%m-%d %H:%M:%S") if isinstance(data["expiry"], datetime) else data["expiry"]
+        subs_writer.writerow([uid, purchased, expiry, data.get("expired_notified", False)])
     subs_io.seek(0)
     subs_bytes = io.BytesIO(subs_io.getvalue().encode('utf-8'))
     subs_bytes.name = "subscriptions.csv"
@@ -592,8 +527,9 @@ async def export_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     links_writer = csv.writer(links_io)
     links_writer.writerow(["link_id", "start", "end", "created", "num_urls", "num_messages"])
     for lid, data in param_links.items():
+        created = data["created"].strftime("%Y-%m-%d %H:%M:%S") if isinstance(data["created"], datetime) else data["created"]
         links_writer.writerow([lid, data["start"], data["end"],
-                               data["created"].strftime("%Y-%m-%d %H:%M:%S"),
+                               created,
                                len(data.get("urls", [])),
                                len(data.get("messages", []))])
     links_io.seek(0)
@@ -605,7 +541,8 @@ async def export_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     usage_writer = csv.writer(usage_io)
     usage_writer.writerow(["user_id", "link", "timestamp"])
     for uid, data in user_usage.items():
-        usage_writer.writerow([uid, data["link"], data["timestamp"].strftime("%Y-%m-%d %H:%M:%S")])
+        ts = data["timestamp"].strftime("%Y-%m-%d %H:%M:%S") if isinstance(data["timestamp"], datetime) else data["timestamp"]
+        usage_writer.writerow([uid, data["link"], ts])
     usage_io.seek(0)
     usage_bytes = io.BytesIO(usage_io.getvalue().encode('utf-8'))
     usage_bytes.name = "user_usage.csv"
@@ -710,9 +647,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e:
                     logger.error(f"Error mentioning user {uid}: {e}")
                     mention = uid
-                purchased = sub['purchased'].strftime('%Y-%m-%d %H:%M')
-                expiry = sub['expiry'].strftime('%Y-%m-%d %H:%M')
-                time_left = sub['expiry'] - now
+                purchased = sub['purchased'].strftime('%Y-%m-%d %H:%M') if isinstance(sub['purchased'], datetime) else sub['purchased']
+                expiry = sub['expiry'].strftime('%Y-%m-%d %H:%M') if isinstance(sub['expiry'], datetime) else sub['expiry']
+                time_left = sub['expiry'] - now if isinstance(sub['expiry'], datetime) else timedelta(0)
                 days = time_left.days
                 hours = time_left.seconds // 3600
                 lines.append(f"({idx}) {mention} | Purchased: {purchased} | Expires: {expiry} | {days}d {hours}h left")
@@ -765,7 +702,7 @@ async def subscription_listener(update: Update, context: ContextTypes.DEFAULT_TY
             logger.error(f"Error processing subscription: {e}")
 
 # ----------------------
-# Updated /plan Command
+# Updated /plan Command (Display Only)
 # ----------------------
 async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -850,6 +787,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/export - Export data as CSV\n"
             "/users - View user stats\n"
             "/plan - View your subscription plan\n"
+            "/MongoDB - Show MongoDB info\n"
             "/help - Display this help message"
         )
     else:
@@ -863,6 +801,31 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Thank you for using our service!"
         )
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+
+# ----------------------
+# MongoDB Info Handler (/MongoDB)
+# ----------------------
+async def mongodb_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    # List all collection names and document counts
+    collections = await mongo_db.list_collection_names()
+    collections_info = ""
+    for col in collections:
+        count = await mongo_db[col].count_documents({})
+        collections_info += f"{col}: {count} document(s)\n"
+    # Get database statistics
+    stats = await mongo_db.command("dbstats")
+    data_size = stats.get("dataSize", 0)
+    storage_size = stats.get("storageSize", 0)
+    msg = (
+        f"MongoDB URL: {MONGO_URL}\n"
+        f"Database: {DB_NAME}\n\n"
+        f"Collections:\n{collections_info}\n"
+        f"Data Size: {data_size / (1024*1024):.2f} MB\n"
+        f"Storage Size: {storage_size / (1024*1024):.2f} MB"
+    )
+    await update.message.reply_text(msg)
 
 # ----------------------
 # Automatic Expiry Checker
@@ -891,12 +854,11 @@ async def check_expired_subscriptions(context: ContextTypes.DEFAULT_TYPE):
     await save_data()
 
 # ----------------------
-# Initialization Function
+# Application Startup Callback
 # ----------------------
-async def init_data(application: Application):
-    await load_data_from_mongo()
+async def on_startup(app: Application):
+    await load_data()
 
 # ----------------------
 # Main Function
 # ----------------------
-
