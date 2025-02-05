@@ -29,7 +29,7 @@ from telegram.ext import (
 
 # Import everything from script1 (ensure these are defined in script1)
 from script1 import (
-    load_data, save_data, delete_later, check_required_channels, send_stored_message, 
+    load_data_from_mongo, save_data, delete_later, check_required_channels, send_stored_message, 
     start_cmd, betch, process_first_post, process_last_post, broadcast_handler, setting_cmd, 
     export_data, list_links, website_handler, button_handler, handle_website_update, 
     subscription_listener, plan, pay_command, users_command, help_command, mongodb_info, 
