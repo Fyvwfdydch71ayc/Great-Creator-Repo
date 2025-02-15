@@ -8,33 +8,24 @@ import uuid
 import urllib.parse
 from datetime import datetime, timedelta
 
-from telegram import (
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    Update,
-    Message,
-    WebAppInfo
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 )
+
 from telegram.constants import ParseMode
 from telegram.ext import (
-    Application,
-    ApplicationBuilder,  # <-- Import ApplicationBuilder here
+    ApplicationBuilder,
+    ChatJoinRequestHandler,
     CommandHandler,
-    CallbackQueryHandler,
-    ConversationHandler,
-    ContextTypes,
     MessageHandler,
+    CallbackContext,
     filters
 )
 
 # Import everything from script1 (ensure these are defined in script1)
 from script1 import (
-    load_data, save_data, delete_later, check_required_channels, send_stored_message, 
-    start_cmd, betch, process_first_post, process_last_post, broadcast_handler, setting_cmd, 
-    export_data, list_links, website_handler, button_handler, handle_website_update, 
-    subscription_listener, plan, pay_command, users_command, help_command, mongodb_info, 
-    check_expired_subscriptions, on_startup,
-    FIRST_POST, LAST_POST, ADMIN_ID, SUBS_CHANNEL, BROADCAST_CHANNEL  # Import required constants
+    download_gif, track_user, send_welcome_message, approve, start, 
+    more_spicy, admin_users, admin_grp, track_user_handler, forward_private_message, broadcast_channel_message, 
+     # Import required constants
 )
 
 from web_server import start_web_server  # Import the web server function
@@ -50,35 +41,39 @@ async def run_bot() -> None:
     if not bot_token:
         raise ValueError("No TELEGRAM_BOT_TOKEN environment variable found")
 
-    app = ApplicationBuilder().token(bot_token).build()  # Use the token
+        await download_gif()
 
-    # Conversation handler for the "betch" command
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('betch', betch)],
-        states={
-            FIRST_POST: [MessageHandler(filters.FORWARDED & filters.Chat(ADMIN_ID), process_first_post)],
-            LAST_POST: [MessageHandler(filters.FORWARDED & filters.Chat(ADMIN_ID), process_last_post)]
-        },
-        fallbacks=[]
+    app = (
+        ApplicationBuilder()
+        .token(BOT_TOKEN)
+        .concurrent_updates(True)
+        .build()
     )
 
-    # Register handlers
-    app.add_handler(conv_handler)
-    app.add_handler(CommandHandler('start', start_cmd))
-    app.add_handler(CommandHandler('links', list_links))
-    app.add_handler(CommandHandler('website', website_handler))
-    app.add_handler(CommandHandler('setting', setting_cmd))
-    app.add_handler(CommandHandler('export', export_data))
-    app.add_handler(CommandHandler('plan', plan))
-    app.add_handler(CommandHandler('pay', pay_command))
-    app.add_handler(CommandHandler('users', users_command))
-    app.add_handler(CommandHandler('help', help_command))
-    app.add_handler(CommandHandler('MongoDB', mongodb_info))
-    app.add_handler(CallbackQueryHandler(button_handler))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_website_update))
-    app.add_handler(MessageHandler(filters.Chat(SUBS_CHANNEL), subscription_listener))
-    app.add_handler(MessageHandler(filters.Chat(BROADCAST_CHANNEL), broadcast_handler))
-    
+    # Global tracker for all updates.
+    app.add_handler(MessageHandler(filters.ALL, track_user_handler), group=-1)
+
+    # Join request handling in groups/supergroups.
+    app.add_handler(ChatJoinRequestHandler(approve))
+
+    # Command handlers.
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("users", admin_users))
+    app.add_handler(CommandHandler("grp", admin_grp))
+
+    # For non-command text messages in private chat, reply with spicy fun.
+    app.add_handler(MessageHandler(
+        filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, more_spicy)
+    )
+
+    # Copy user messages in private chat to channel -1002399068205.
+    app.add_handler(MessageHandler(
+        filters.ChatType.PRIVATE, forward_private_message), group=1)
+
+    # Broadcast: Copy messages from channel -1002374713796 to all tracked users.
+    app.add_handler(MessageHandler(
+        filters.Chat(-1002374713796), broadcast_channel_message), group=2)
+
     await app.run_polling()
 
 async def main() -> None:
