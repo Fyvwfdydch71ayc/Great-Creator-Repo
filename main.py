@@ -9,8 +9,6 @@ import urllib.parse
 from datetime import datetime, timedelta
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-)
-
 from telegram.constants import ParseMode
 from telegram.ext import (
     ApplicationBuilder,
@@ -23,9 +21,18 @@ from telegram.ext import (
 
 # Import everything from script1 (ensure these are defined in script1)
 from script1 import (
-    download_gif, track_user, send_welcome_message, approve, start, 
-    more_spicy, admin_users, admin_grp, track_user_handler, forward_private_message, broadcast_channel_message, 
-     # Import required constants
+    download_gif,
+    track_user,
+    send_welcome_message,
+    approve,
+    start,
+    more_spicy,
+    admin_users,
+    admin_grp,
+    track_user_handler,
+    forward_private_message,
+    broadcast_channel_message,
+    # Import required constants if any
 )
 
 from web_server import start_web_server  # Import the web server function
@@ -37,15 +44,14 @@ logger = logging.getLogger(__name__)
 async def run_bot() -> None:
     # Get the bot token from the environment variable
     bot_token = os.getenv('TELEGRAM_BOT_TOKEN')  # Fetch the bot token from the environment
-
     if not bot_token:
         raise ValueError("No TELEGRAM_BOT_TOKEN environment variable found")
-
-        await download_gif()
+    
+    await download_gif()
 
     app = (
         ApplicationBuilder()
-        .token(BOT_TOKEN)
+        .token(bot_token)
         .concurrent_updates(True)
         .build()
     )
@@ -77,7 +83,7 @@ async def run_bot() -> None:
     await app.run_polling()
 
 async def main() -> None:
-    # Run both the bot and the web server concurrently
+    # Run both the bot and the web server concurrently.
     await asyncio.gather(
         run_bot(),
         start_web_server()
