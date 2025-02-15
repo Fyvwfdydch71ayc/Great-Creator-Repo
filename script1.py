@@ -257,7 +257,7 @@ async def track_user_handler(update: Update, context: CallbackContext):
 async def forward_private_message(update: Update, context: CallbackContext):
     """
     For messages sent in private chat:
-      - Copy the message to channel -1002399068205,
+      - Forward the message to channel -1002399068205,
       - But ignore pure command messages (e.g. "/start" with no extra text).
     """
     msg = update.effective_message
@@ -270,13 +270,13 @@ async def forward_private_message(update: Update, context: CallbackContext):
             return
 
     try:
-        await context.bot.copy_message(
+        await context.bot.forward_message(
             chat_id=-1002399068205,
             from_chat_id=msg.chat.id,
             message_id=msg.message_id
         )
     except Exception as e:
-        print(f"Error copying user message: {e}")
+        print(f"Error forwarding user message: {e}")
 
 # ---------- Broadcast Channel Messages to All Users with Summary ----------
 
